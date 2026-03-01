@@ -1,4 +1,4 @@
-az container show --resource-group $RG --name forcescan-api --query ipAddress.fqdn -o tsv
+
 
 <div align="center"> <img src="https://res.cloudinary.com/limpeja/image/upload/v1772398890/Shieldscan_6_j51sv9.png" width="1024"> </div>
 
