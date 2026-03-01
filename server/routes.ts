@@ -10,6 +10,7 @@ import { randomUUID } from "crypto";
 import * as readline from "readline";
 import * as fs from "fs";
 import * as path from "path";
+import { generateEnterprisePdf, type EnterpriseReportPayload } from "./report";
 
 const BACKEND_ROOT = path.join(process.cwd(), "backend");
 const ALLOWLIST_PATH = path.join(BACKEND_ROOT, "scanner", "allowlist.json");
@@ -184,6 +185,27 @@ export async function registerRoutes(
       return res.json(scan);
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch scan" });
+    }
+  });
+
+  // Enterprise PDF report generator (session auth)
+  app.post("/api/report/pdf", async (req: Request, res: Response) => {
+    const userId = getSessionUserId(req);
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+
+    const report = req.body?.report as EnterpriseReportPayload | undefined;
+    if (!report || !report.metadata || !report.panorama) {
+      return res.status(400).json({ error: "Invalid report payload" });
+    }
+
+    try {
+      const pdfBuffer = await generateEnterprisePdf(report);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "attachment; filename=\"forcescan-enterprise.pdf\"");
+      return res.status(200).send(pdfBuffer);
+    } catch (err: any) {
+      log(`PDF generation error: ${err?.message}`, "report");
+      return res.status(500).json({ error: "Failed to generate PDF" });
     }
   });
 
