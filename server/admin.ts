@@ -19,6 +19,57 @@ const BLOCKED_TARGETS = [
   /^192\.168\./, /^0\.0\.0\.0$/, /^::1$/, /^169\.254\./, /\.internal$/i, /\.local$/i,
 ];
 
+async function runMotor11(target: string, findings: any[], probes: any[]) {
+  return new Promise<{ report?: any; events: any[] }>((resolve) => {
+    const ctx = { findings: findings || [], probes: probes || [] };
+    const ctxFile = path.join(os.tmpdir(), `motor11_ctx_${Date.now()}.json`);
+    fs.writeFileSync(ctxFile, JSON.stringify(ctx));
+
+    const pyScript = [
+      "import json, asyncio, sys",
+      "from scanner.autonomous_engine import AutonomousConsolidator",
+      "ctx_path=sys.argv[1]",
+      "target=sys.argv[2]",
+      "ctx=json.load(open(ctx_path))",
+      "engine=AutonomousConsolidator(target)",
+      "report=asyncio.run(engine.execute_full_cycle(findings=ctx.get('findings'), probes=ctx.get('probes')))",
+      "print(json.dumps({'event':'motor11_report','data':report}))",
+    ].join("; ");
+
+    const proc = spawn("python3", ["-c", pyScript, ctxFile, target], {
+      cwd: BACKEND_ROOT,
+      env: { ...process.env, PYTHONUNBUFFERED: "1" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    const events: any[] = [];
+    const rl = readline.createInterface({ input: proc.stdout! });
+    rl.on("line", (line: string) => {
+      try {
+        events.push(JSON.parse(line));
+      } catch {
+        events.push({ event: "motor11_log", data: { message: line } });
+      }
+    });
+
+    proc.stderr?.on("data", (d: Buffer) => {
+      events.push({ event: "motor11_stderr", data: d.toString() });
+    });
+
+    proc.on("close", () => {
+      let report: any = undefined;
+      for (const ev of events) {
+        if (ev.event === "motor11_report" || ev.event === "MOTOR11_FINAL_REPORT") {
+          report = ev.data || ev;
+          break;
+        }
+      }
+      fs.rm(ctxFile, { force: true }, () => {});
+      resolve({ report, events });
+    });
+  });
+}
+
 function validateSniperTarget(target: string): { valid: boolean; url: string; error?: string } {
   const fullUrl = target.includes("://") ? target : `https://${target}`;
   try {
@@ -1139,6 +1190,7 @@ adminRouter.post("/api/admin/sniper/full-recon", async (req: Request, res: Respo
       exposedAssets: [] as any[],
       telemetry: {} as any,
       phases: {} as any,
+      motor11Report: null as any,
       counts: { total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0 },
       startedAt: Date.now(),
     };
@@ -1494,6 +1546,17 @@ adminRouter.post("/api/admin/sniper/pipeline", async (req: Request, res: Respons
         });
       } catch (err: any) {
         log(`[SNIPER PIPELINE] DB save error: ${err.message}`, "admin");
+      }
+
+      // Motor 11: usa achados/probes da pipeline para exploração autônoma
+      try {
+        const motor11 = await runMotor11(validation.url, state.findings, state.probes || state.exposedAssets || []);
+        if (motor11.report) state.motor11Report = motor11.report;
+        motor11.events.forEach((ev: any) => {
+          state.events.push({ event: `motor11:${ev.event}`, data: ev.data, timestamp: Date.now() });
+        });
+      } catch (err: any) {
+        log(`[MOTOR11] Error: ${err.message}`, "admin");
       }
 
       await storage.createAuditLog({
