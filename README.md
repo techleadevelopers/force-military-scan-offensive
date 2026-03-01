@@ -1,5 +1,5 @@
 
-<div align="center"> <img src="https://res.cloudinary.com/limpeja/image/upload/v1772170000/Shieldscan_1_hggjsm.png" width="224"> </div>
+<div align="center"> <img src="https://res.cloudinary.com/limpeja/image/upload/v1772395368/Dark_Blue_and_Purple_Modern_Cyber_Security_Logo_6_p5rgz2.png" width="424"> </div>
 
 # Military Scan Enterprise (MSE) — Documentacao Completa do Ecossistema
 
