@@ -1,5 +1,6 @@
+az container show --resource-group $RG --name forcescan-api --query ipAddress.fqdn -o tsv
 
-<div align="center"> <img src="https://res.cloudinary.com/limpeja/image/upload/v1772396721/Shieldscan_5_vm96lp.png" width="1024"> </div>
+<div align="center"> <img src="https://res.cloudinary.com/limpeja/image/upload/v1772398890/Shieldscan_6_j51sv9.png" width="1024"> </div>
 
 # Military Scan Enterprise (MSE) — Documentacao Completa do Ecossistema
 
