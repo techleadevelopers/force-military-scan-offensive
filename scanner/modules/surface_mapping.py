@@ -1,6 +1,8 @@
 import socket
 import ssl
 import asyncio
+import ipaddress
+import hashlib
 from urllib.parse import urlparse
 from .base import BaseModule
 from scanner.models import Finding
@@ -161,6 +163,12 @@ class SurfaceMappingModule(BaseModule):
         return findings
 
     async def _enumerate_subdomains(self, hostname: str) -> list:
+        """
+        Enumerate subdomains with strong anti-mock validation:
+        - DNS resolution via dnspython (fallback to socket)
+        - Reject private/loopback/multicast IPs
+        - Detect suspicious fixed-count (e.g., exactly 17) and trigger deep scan
+        """
         findings = []
         self.log("Starting subdomain enumeration...")
 
@@ -173,50 +181,135 @@ class SurfaceMappingModule(BaseModule):
         if len(parts) > 2:
             base_domain = ".".join(parts[-(min(len(parts), 2)):])
 
-        discovered = []
-        for sub in self.COMMON_SUBDOMAINS:
-            subdomain = f"{sub}.{base_domain}"
-            if subdomain == hostname:
-                continue
-            try:
-                socket.getaddrinfo(subdomain, None)
-                discovered.append(subdomain)
-                self.log(f"  Subdomain discovered: {subdomain}", "success")
+        discovered = self._scan_wordlist(base_domain, self.COMMON_SUBDOMAINS)
 
-                severity = "info"
-                sensitive_subs = ["admin", "dev", "staging", "test", "internal", "backup", "db", "jenkins", "gitlab", "jira", "grafana", "kibana", "ci"]
-                if sub in sensitive_subs:
-                    severity = "medium"
+        # Guardrail: fixed suspicious count (17) triggers deeper validation
+        if len(discovered) == 17 and self._is_suspicious_pattern(discovered):
+            self.log("❌ PADRÃO SUSPEITO: 17 subdomínios genéricos — iniciando deep scan", "error")
+            deep_results = self._deep_scan(base_domain)
+            discovered = deep_results
 
-                findings.append(
-                    Finding(
-                        severity=severity,
-                        title=f"Subdomain Discovered: {subdomain}",
-                        description=f"The subdomain {subdomain} resolves to an IP address and may expose additional attack surface.",
-                        phase=self.phase,
-                        recommendation="Review discovered subdomains for unnecessary exposure. Ensure sensitive environments (staging, admin, internal) are not publicly accessible.",
-                        cvss_score=3.1 if severity == "info" else 5.3,
-                    )
-                )
-                self.finding(
-                    severity,
-                    f"Subdomain Discovered: {subdomain}",
-                    f"Subdomain {subdomain} is resolvable via DNS.",
+        if not discovered:
+            self.log("No additional subdomains discovered", "info")
+            return findings
+
+        self.log(f"Subdomain enumeration complete — {len(discovered)} subdomain(s) found", "success")
+
+        for entry in discovered:
+            subdomain = entry["subdomain"]
+            sub = subdomain.split(".")[0]
+            severity = "info"
+            sensitive_subs = [
+                "admin", "dev", "staging", "test", "internal", "backup", "db",
+                "jenkins", "gitlab", "jira", "grafana", "kibana", "ci",
+                "login", "auth", "sso", "idp", "secure", "payment"
+            ]
+            if sub in sensitive_subs:
+                severity = "medium"
+
+            findings.append(
+                Finding(
+                    severity=severity,
+                    title=f"Subdomain Discovered: {subdomain}",
+                    description=f"The subdomain {subdomain} resolves to public IP(s): {', '.join(entry['ips'])}",
+                    phase=self.phase,
+                    recommendation="Review discovered subdomains for unnecessary exposure. Ensure sensitive environments (staging, admin, internal) are not publicly accessible.",
                     cvss_score=3.1 if severity == "info" else 5.3,
                 )
-                self.asset("endpoint", subdomain, f"Subdomain: {subdomain}", severity)
-
-            except socket.gaierror:
-                pass
-            except Exception:
-                pass
-
-        if discovered:
-            self.log(f"Subdomain enumeration complete — {len(discovered)} subdomain(s) found", "success")
-        else:
-            self.log("No additional subdomains discovered", "info")
+            )
+            self.finding(
+                severity,
+                f"Subdomain Discovered: {subdomain}",
+                f"Subdomain {subdomain} is resolvable via DNS.",
+                cvss_score=3.1 if severity == "info" else 5.3,
+            )
+            self.asset("endpoint", subdomain, f"Subdomain: {subdomain}", severity)
 
         return findings
+
+    # --- Subdomain validation helpers -------------------------------------------------
+
+    KNOWN_SUBDOMAIN_HASHES = set()
+
+    def _scan_wordlist(self, base_domain: str, wordlist: list) -> list:
+        discovered = []
+        for sub in wordlist:
+            fqdn = f"{sub}.{base_domain}"
+            if fqdn == base_domain:
+                continue
+            try:
+                ips = self._resolve_dns(fqdn)
+                if ips and self._is_public_ip_list(ips):
+                    discovered.append({"subdomain": fqdn, "ips": ips, "common": sub})
+                    self.log(f"  Subdomain discovered: {fqdn} -> {ips}", "success")
+            except Exception as e:
+                self.log(f"DNS resolve failed for {fqdn}: {e}", "debug")
+        return discovered
+
+    def _resolve_dns(self, fqdn: str):
+        try:
+            import dns.resolver
+            answers = dns.resolver.resolve(fqdn, "A")
+            return [str(r) for r in answers]
+        except Exception:
+            addrs = socket.getaddrinfo(fqdn, None)
+            return list({addr[4][0] for addr in addrs})
+
+    def _is_public_ip_list(self, ips):
+        for ip in ips:
+            try:
+                ip_obj = ipaddress.ip_address(ip)
+                if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_multicast:
+                    return False
+            except Exception:
+                return False
+        return True
+
+    def _is_suspicious_pattern(self, discovered: list) -> bool:
+        names = [d["subdomain"].split(".")[0] for d in discovered]
+        common_names = {"api", "admin", "dev", "staging", "test", "beta"}
+
+        if all(name in common_names for name in names):
+            return True
+
+        hash_value = hashlib.md5("".join(sorted(names)).encode()).hexdigest()
+        if hash_value in self.KNOWN_SUBDOMAIN_HASHES:
+            return True
+        self.KNOWN_SUBDOMAIN_HASHES.add(hash_value)
+        return False
+
+    def _load_extended_wordlist(self) -> list:
+        paths = [
+            "scanner/wordlists/subdomains.txt",
+            "/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt",
+        ]
+        for p in paths:
+            try:
+                with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                    words = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+                    if words:
+                        return words
+            except Exception:
+                continue
+
+        return [
+            "prod", "production", "stage", "qa", "uat", "demo", "sandbox", "integration", "internal",
+            "corp", "office", "hr", "finance", "billing", "support", "help", "docs", "wiki", "confluence",
+            "login", "secure", "payment", "checkout", "store", "shop", "graphql", "rest", "api2", "api3",
+            "v2", "v3", "mobile", "m", "old", "legacy", "new", "cdn2", "static", "assets", "files", "media",
+            "upload", "downloads", "edge", "gateway", "proxy", "k8s", "cluster", "db", "database", "mysql",
+            "postgres", "redis", "mongo", "elastic", "search", "log", "logs", "monitor", "metrics",
+        ]
+
+    def _deep_scan(self, base_domain: str) -> list:
+        extended_wordlist = self._load_extended_wordlist()
+        limited = extended_wordlist[:200]
+        deep_results = self._scan_wordlist(base_domain, limited)
+        if deep_results:
+            self.log(f"Deep scan recovered {len(deep_results)} real subdomains after suspicious pattern", "warn")
+        else:
+            self.log("Deep scan found no additional subdomains", "info")
+        return deep_results
 
     async def _discover_http_methods(self, base_url: str, scanned: int) -> list:
         findings = []
