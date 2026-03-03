@@ -1,21 +1,16 @@
 FROM node:20-alpine
 
-# Keep project root at /app so backend paths resolve to /app/backend/...
+# Use backend repo as build context; place it under /app/backend to match runtime paths
 WORKDIR /app
 
-# Install dependencies for the backend package
-COPY backend/package*.json backend/
-COPY backend/tsconfig.json backend/
+# Copy everything from backend context into /app/backend
+COPY . ./backend
+
+# Install deps inside backend folder
 WORKDIR /app/backend
 RUN npm ci --omit=dev
 
-# Copy backend source (server + scanner + shared) including allowlist
-WORKDIR /app
-COPY backend/server backend/server
-COPY backend/scanner backend/scanner
-COPY backend/shared backend/shared
-
-# Runtime from /app (not /app/backend) so process.cwd() stays /app
+# Run from /app so process.cwd() is /app and allowlist.ts resolves /app/backend/scanner/allowlist.json
 WORKDIR /app
 
 ENV NODE_ENV=production
