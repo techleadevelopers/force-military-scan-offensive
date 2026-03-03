@@ -2,6 +2,7 @@ import httpx
 import asyncio
 import re
 from .base import BaseModule
+from .ssrf_validator import RedisSSRFValidator
 from scanner.models import Finding
 from scanner.config import USER_AGENT
 
@@ -57,6 +58,7 @@ class InputValidationModule(BaseModule):
     async def execute(self, job) -> list:
         findings = []
         base_url = job.base_url
+        self.redis_validator = RedisSSRFValidator()
 
         self.log(f"Running non-destructive input validation tests on {base_url}")
         self.log("Note: These tests use benign probe payloads only")
@@ -198,7 +200,16 @@ class InputValidationModule(BaseModule):
                     )
                     body = resp.text
 
-                    if test["detect"] and re.search(test["detect"], body, re.IGNORECASE):
+                    hit = bool(test["detect"] and re.search(test["detect"], body, re.IGNORECASE))
+
+                    # Additional validation for Redis to avoid false positives
+                    if hit and "redis" in test["name"].lower():
+                        validation = self.redis_validator.validate_redis_response(body, resp.headers, test["url"])
+                        if validation["action"] != "ACCEPT":
+                            hit = False
+                            self.log(f"[SSRF REDIS REJECTED] {test['url']} — {validation['reason']}", "info")
+
+                    if hit:
                         findings.append(
                             Finding(
                                 severity="critical",
