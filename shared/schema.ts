@@ -48,6 +48,13 @@ export const subscriptions = pgTable("subscriptions", {
   expiresAt: timestamp("expires_at"),
 });
 
+export const scanResults = pgTable("scan_results", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scanId: varchar("scan_id").references(() => scans.id).notNull(),
+  motor11v2Report: jsonb("motor11v2_report").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id),
@@ -75,6 +82,11 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).pick({
   plan: true,
 });
 
+export const insertScanResultSchema = createInsertSchema(scanResults).pick({
+  scanId: true,
+  motor11v2Report: true,
+});
+
 export const insertAuditLogSchema = createInsertSchema(auditLogs).pick({
   userId: true,
   action: true,
@@ -89,5 +101,7 @@ export type InsertScan = z.infer<typeof insertScanSchema>;
 export type Scan = typeof scans.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertScanResult = z.infer<typeof insertScanResultSchema>;
+export type ScanResult = typeof scanResults.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
