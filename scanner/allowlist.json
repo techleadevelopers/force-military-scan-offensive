@@ -3,6 +3,8 @@
     "mse.dev",
     "*.mse.dev",
     "forcescan.app",
-    "*.forcescan.app"
+    "*.forcescan.app",
+    "picpay.com",
+    "*.picpay.com"
   ]
 }
