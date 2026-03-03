@@ -147,7 +147,7 @@ export async function registerRoutes(
     if (!apiKey) return res.status(401).json({ error: "API key required" });
     try {
       const { db } = await import("./db");
-      const { users: usersTable } = await import("@shared/schema");
+      const { users: usersTable } = await import("../shared/schema");
       const { eq } = await import("drizzle-orm");
       const [user] = await db.select().from(usersTable).where(eq(usersTable.apiKey, apiKey));
       if (!user) return res.status(401).json({ error: "Invalid API key" });
@@ -173,7 +173,7 @@ export async function registerRoutes(
     if (!apiKey) return res.status(401).json({ error: "API key required" });
     try {
       const { db } = await import("./db");
-      const { users: usersTable } = await import("@shared/schema");
+      const { users: usersTable } = await import("../shared/schema");
       const { eq } = await import("drizzle-orm");
       const [user] = await db.select().from(usersTable).where(eq(usersTable.apiKey, apiKey));
       if (!user) return res.status(401).json({ error: "Invalid API key" });
