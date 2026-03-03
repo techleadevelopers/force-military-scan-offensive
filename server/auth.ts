@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
-import { insertUserSchema } from "@shared/schema";
+import { insertUserSchema } from "../shared/schema";
 import { z } from "zod";
 
 const registerSchema = insertUserSchema.extend({
