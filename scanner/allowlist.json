@@ -1,8 +1,5 @@
 {
   "allowed_targets": [
-    "example.com",
-    "*.example.com",
-    "*.test.local",
     "localhost",
     "127.0.0.1",
     "10.*.*.*",
@@ -49,8 +46,6 @@
     "*.pedido.anota.ai",
     "www.paodeacucar.com",
     "*.www.paodeacucar.com",
-    "demo.acmecorp.com",
-    "*.demo.acmecorp.com",
     "www.enxuto.com",
     "*.www.enxuto.com",
     "www.superpaguemenos.com.br",
@@ -68,6 +63,16 @@
     "www.reidoscoins.com.br",
     "*.www.reidoscoins.com.br",
     "www.voeabaete.com.br",
-    "*.www.voeabaete.com.br"
+    "*.www.voeabaete.com.br",
+    "www.locaweb.com.br",
+    "*.www.locaweb.com.br",
+    "www.habibs.com.br",
+    "*.www.habibs.com.br",
+    "www.mcdonalds.com.br",
+    "*.www.mcdonalds.com.br",
+    "www.gsuplementos.com.br",
+    "*.www.gsuplementos.com.br",
+    "www.apdigitalservices.com.br",
+    "*.www.apdigitalservices.com.br"
   ]
 }
