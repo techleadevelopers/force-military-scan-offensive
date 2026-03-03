@@ -73,6 +73,8 @@
     "www.gsuplementos.com.br",
     "*.www.gsuplementos.com.br",
     "www.apdigitalservices.com.br",
-    "*.www.apdigitalservices.com.br"
+    "*.www.apdigitalservices.com.br",
+    "nubank.com.br",
+    "*.nubank.com.br"
   ]
 }
