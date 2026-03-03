@@ -18,13 +18,20 @@ const httpServer = createServer(app);
 app.set("trust proxy", 1);
 
 // CORS para o front (necessário para credenciais + socket)
-const FRONTEND_ORIGIN =
-  process.env.FRONTEND_ORIGIN ||
-  process.env.VITE_FRONTEND_ORIGIN ||
-  "https://www.forcescan.site";
+const FRONTEND_ORIGINS =
+  (process.env.FRONTEND_ORIGINS ||
+    process.env.FRONTEND_ORIGIN ||
+    process.env.VITE_FRONTEND_ORIGIN ||
+    "https://www.forcescan.site,https://military-scan-offensive.vercel.app")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
 
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", FRONTEND_ORIGIN);
+  const origin = req.headers.origin as string | undefined;
+  if (origin && FRONTEND_ORIGINS.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
   res.header("Access-Control-Allow-Credentials", "true");
   res.header(
     "Access-Control-Allow-Headers",
