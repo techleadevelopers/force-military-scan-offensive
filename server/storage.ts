@@ -7,7 +7,7 @@ import {
   type Subscription, type InsertSubscription,
   type AuditLog, type InsertAuditLog,
   type ScanResult, type InsertScanResult
-} from "@shared/schema";
+} from "../shared/schema";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
