@@ -13,7 +13,8 @@ COPY . ./backend
 # Install deps inside backend folder
 WORKDIR /app/backend
 RUN npm ci --omit=dev
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Install Python deps inside a venv to satisfy PEP 668
+RUN python3 -m venv /py && . /py/bin/activate && pip install --no-cache-dir -r requirements.txt
 
 # Run from /app so process.cwd() is /app and allowlist.ts resolves /app/backend/scanner/allowlist.json
 WORKDIR /app
