@@ -1,6 +1,7 @@
 FROM node:20-alpine
 
-WORKDIR /app
+# Keep backend under /app/backend so server paths resolve (e.g., backend/scanner/allowlist.json)
+WORKDIR /app/backend
 
 # Install dependencies for the backend package
 COPY package*.json ./
