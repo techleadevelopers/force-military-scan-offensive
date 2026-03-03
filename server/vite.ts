@@ -1,7 +1,8 @@
 import { type Express } from "express";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
+// Vite config está na raiz do monorepo; subir dois níveis a partir de backend/server
+import viteConfig from "../../vite.config";
 import fs from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
@@ -37,6 +38,7 @@ export async function setupVite(server: Server, app: Express) {
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,
+        "..",
         "..",
         "client",
         "index.html",
