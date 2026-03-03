@@ -11,22 +11,12 @@ import * as readline from "readline";
 import * as fs from "fs";
 import * as path from "path";
 import { generateEnterprisePdf, type EnterpriseReportPayload } from "./report";
+import { evaluateMockPatterns } from "./mockValidator";
+import { loadAllowlistStrict, writeAllowlistStrict } from "./allowlist";
 
 const BACKEND_ROOT = path.join(process.cwd(), "backend");
-const ALLOWLIST_PATH = path.join(BACKEND_ROOT, "scanner", "allowlist.json");
-
-function readAllowlist(): { allowed_targets: string[] } {
-  try {
-    if (fs.existsSync(ALLOWLIST_PATH)) {
-      return JSON.parse(fs.readFileSync(ALLOWLIST_PATH, "utf-8"));
-    }
-  } catch {}
-  return { allowed_targets: [] };
-}
-
-function writeAllowlist(data: { allowed_targets: string[] }): void {
-  fs.writeFileSync(ALLOWLIST_PATH, JSON.stringify(data, null, 2));
-}
+const PYTHON_BIN = process.env.PYTHON_BIN || process.env.PYTHON || "python";
+loadAllowlistStrict(); // fail fast if allowlist is invalid or polluted
 
 function addTargetToAllowlist(target: string): { hostname: string; added: boolean } | null {
   const fullUrl = target.includes("://") ? target : `https://${target}`;
@@ -46,7 +36,7 @@ function addTargetToAllowlist(target: string): { hostname: string; added: boolea
     return null;
   }
 
-  const allowlist = readAllowlist();
+  const allowlist = loadAllowlistStrict();
 
   const alreadyPresent = allowlist.allowed_targets.some((entry: string) => {
     const regex = new RegExp(
@@ -57,9 +47,10 @@ function addTargetToAllowlist(target: string): { hostname: string; added: boolea
   });
 
   if (!alreadyPresent) {
-    allowlist.allowed_targets.push(hostname);
-    allowlist.allowed_targets.push(`*.${hostname}`);
-    writeAllowlist(allowlist);
+    const updated = {
+      allowed_targets: [...allowlist.allowed_targets, hostname, `*.${hostname}`],
+    };
+    writeAllowlistStrict(updated);
     return { hostname, added: true };
   }
 
@@ -93,6 +84,8 @@ export async function registerRoutes(
     pingTimeout: 30000,
     pingInterval: 10000,
   });
+  // expose io for other routers (e.g., admin) via req.app.get("io")
+  app.set("io", io);
 
   function getSessionUserId(req: Request): string | null {
     return (req.session as any)?.userId || null;
@@ -103,7 +96,11 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ error: "Not authenticated" });
     try {
       const userScans = await storage.getScansByUser(userId);
-      return res.json(userScans);
+      const enriched = userScans.map((s) => {
+        const { mockProbability, suspicious } = evaluateMockPatterns(s);
+        return { ...s, mockProbability, suspicious };
+      });
+      return res.json(enriched);
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch scans" });
     }
@@ -115,7 +112,8 @@ export async function registerRoutes(
     try {
       const scan = await storage.getScan(req.params.id);
       if (!scan || scan.userId !== userId) return res.status(404).json({ error: "Scan not found" });
-      return res.json(scan);
+      const { mockProbability, suspicious, valid } = evaluateMockPatterns(scan);
+      return res.json({ ...scan, mockProbability, suspicious, valid });
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch scan" });
     }
@@ -182,7 +180,8 @@ export async function registerRoutes(
 
       const scan = await storage.getScan(req.params.id);
       if (!scan || scan.userId !== user.id) return res.status(404).json({ error: "Scan not found" });
-      return res.json(scan);
+      const { mockProbability, suspicious, valid } = evaluateMockPatterns(scan);
+      return res.json({ ...scan, mockProbability, suspicious, valid });
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch scan" });
     }
@@ -254,7 +253,7 @@ export async function registerRoutes(
 
   app.get("/api/allowlist", (_req, res) => {
     try {
-      const data = readAllowlist();
+      const data = loadAllowlistStrict();
       return res.json({ count: data.allowed_targets.length });
     } catch (e) {
       return res.status(500).json({ error: "Failed to read allowlist" });
@@ -403,7 +402,7 @@ export async function registerRoutes(
         phase: "",
       });
 
-      const proc = spawn("python3", ["-m", "scanner.orchestrator", target], {
+      const proc = spawn(PYTHON_BIN, ["-m", "scanner.orchestrator", target], {
         cwd: BACKEND_ROOT,
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
         stdio: ["pipe", "pipe", "pipe"],
@@ -598,7 +597,7 @@ export async function registerRoutes(
 
       log(`[SNIPER] Starting sniper scan for ${urlList.length} target(s)`, "scanner");
 
-      const proc = spawn("python3", ["-m", "scanner.sniper_scan", targets], {
+      const proc = spawn(PYTHON_BIN, ["-m", "scanner.sniper_scan", targets], {
         cwd: BACKEND_ROOT,
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
         stdio: ["pipe", "pipe", "pipe"],
@@ -754,7 +753,7 @@ export async function registerRoutes(
       log(`[AUTO-COLLECTOR] Starting target collection`, "scanner");
 
       const configStr = JSON.stringify(config);
-      const proc = spawn("python3", ["-m", "scanner.auto_collector", configStr], {
+      const proc = spawn(PYTHON_BIN, ["-m", "scanner.auto_collector", configStr], {
         cwd: BACKEND_ROOT,
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
         stdio: ["pipe", "pipe", "pipe"],
