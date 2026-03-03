@@ -2,9 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies for the backend package
+# Install dependencies for the backend package (lockfile optional)
 COPY package*.json tsconfig.json ./backend/
-RUN cd backend && npm ci --omit=dev
+RUN cd backend && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
 
 # Copy backend sources (server + scanner + shared) keeping the expected layout
 COPY . ./backend
