@@ -1,4 +1,8 @@
-[
-  "example.com",
-  "localhost"
-]
+{
+  "allowed_targets": [
+    "mse.dev",
+    "*.mse.dev",
+    "forcescan.app",
+    "*.forcescan.app"
+  ]
+}
