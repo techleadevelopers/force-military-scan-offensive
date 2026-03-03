@@ -2,8 +2,11 @@ import { eq, desc, sql, count } from "drizzle-orm";
 import { db } from "./db";
 import {
   users, scans, subscriptions, auditLogs,
+  scanResults,
   type User, type InsertUser, type Scan, type InsertScan,
-  type Subscription, type InsertSubscription, type AuditLog, type InsertAuditLog
+  type Subscription, type InsertSubscription,
+  type AuditLog, type InsertAuditLog,
+  type ScanResult, type InsertScanResult
 } from "@shared/schema";
 
 export interface IStorage {
@@ -20,6 +23,9 @@ export interface IStorage {
   createSubscription(sub: InsertSubscription): Promise<Subscription>;
   getSubscription(userId: string): Promise<Subscription | undefined>;
   updateSubscription(id: string, data: Partial<Subscription>): Promise<Subscription | undefined>;
+
+  createScanResult(result: InsertScanResult): Promise<ScanResult>;
+  getScanResults(scanId: string): Promise<ScanResult[]>;
 
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(userId: string): Promise<AuditLog[]>;
@@ -83,6 +89,15 @@ export class DatabaseStorage implements IStorage {
   async updateSubscription(id: string, data: Partial<Subscription>): Promise<Subscription | undefined> {
     const [sub] = await db.update(subscriptions).set(data).where(eq(subscriptions.id, id)).returning();
     return sub;
+  }
+
+  async createScanResult(data: InsertScanResult): Promise<ScanResult> {
+    const [res] = await db.insert(scanResults).values(data).returning();
+    return res;
+  }
+
+  async getScanResults(scanId: string): Promise<ScanResult[]> {
+    return db.select().from(scanResults).where(eq(scanResults.scanId, scanId));
   }
 
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
