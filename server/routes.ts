@@ -82,7 +82,7 @@ export async function registerRoutes(
     process.env.FRONTEND_ORIGINS ||
     process.env.FRONTEND_ORIGIN ||
     process.env.VITE_FRONTEND_ORIGIN ||
-    "https://www.forcescan.site,https://military-scan-offensive.vercel.app"
+    "https://www.forcescan.site,https://military-scan-offensive.vercel.app,http://localhost:8000"
   )
     .split(",")
     .map((o) => o.trim())
