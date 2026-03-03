@@ -78,8 +78,18 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const allowedOrigins = (
+    process.env.FRONTEND_ORIGINS ||
+    process.env.FRONTEND_ORIGIN ||
+    process.env.VITE_FRONTEND_ORIGIN ||
+    "https://www.forcescan.site,https://military-scan-offensive.vercel.app"
+  )
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   const io = new SocketServer(httpServer, {
-    cors: { origin: "*" },
+    cors: { origin: allowedOrigins, credentials: true },
     transports: ["websocket", "polling"],
     pingTimeout: 30000,
     pingInterval: 10000,
