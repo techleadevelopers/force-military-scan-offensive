@@ -1310,6 +1310,29 @@ socket.on('risk_score', (score) => {
 | 2026-02-20 | 1.1.0 | Browser Recon + JS Secrets Scanner |
 | 2026-02-19 | 1.0.0 | Initial release (4-phase scanner) |
 
+---
+
+## Motores Atuais e Flags (Atualizado)
+
+- **Motor 11 — Autonomous Consolidator**: já integrado no admin (`runMotor11` em `backend/server/admin.ts`). Usa `PYTHON_BIN` (ou `PYTHON`) para invocar `scanner.autonomous_engine`. Mantém eventos no stdout via JSON.
+- **Autologin Admin (dev)**: middleware sempre cria/eleva `admin@mse.dev` (`role=admin`, `plan=pro`). Controle sugerido via env `AUTO_ADMIN=1`; deixar desativado em produção.
+- **Flags de execução**  
+  - `STRIPE_DISABLED=1`: desliga toda a inicialização Stripe.  
+  - `FORCE_STATIC=1`: força servir `dist/public` mesmo em `NODE_ENV=development`.  
+  - `DISABLE_SELENIUM=1`: (implementar early-return) para pular módulos `browser_recon` e `selenium_xss` em ambientes sem Chrome/ChromeDriver.  
+  - `PYTHON_BIN=/caminho/python`: define binário Python para o scanner.  
+  - `PGSSLMODE=disable` + `ssl:false` no Pool local para Postgres self‑hosted.
+- **Drivers DB**: `backend/server/db.ts` usa `pg` (pool padrão) e `drizzle-orm/node-postgres`; Neon/WebSocket removido para evitar `wss://localhost/v2` em dev offline.
+- **Rota /api/admin/bypass**: permanece para testes; cria/eleva `admin@mse.dev`. Em produção, proteger com flag ou remover.
+
+## Itens a Injetar (planejado)
+
+- **HTTP Request Smuggling Module**: novo módulo em `scanner/modules/http_smuggling.py` com probes CL.TE / TE.CL / H2.CL, registro no orchestrator (simulation) e sniper pipeline.
+- **Toggles por módulo**: `DISABLE_SMUGGLING`, `DISABLE_GRAPHQL`, `DISABLE_PERSISTENCE` para rodar scanner em ambientes restritos.
+- **Selenium Toggle**: adicionar checagem de `DISABLE_SELENIUM` no início de `browser_recon.py` e `selenium_xss.py` retornando vazio quando setado.
+
+*(Seção adicionada sem remover conteúdo existente.)*
+
 
 # MSE — Auditoria Completa da Logica de Tomada de Decisao do Hacker
 
