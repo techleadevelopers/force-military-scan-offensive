@@ -107,6 +107,21 @@ SERVER_VERSION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+def _cap_header_severity(title: str, severity: str) -> str:
+    key = (title or "").lower()
+    if "x-frame-options" in key:
+        return "low"
+    if "content-security-policy" in key and "missing" in key:
+        return "low"
+    if "allow-origin" in key and "cors" in key:
+        return "medium"
+    if "server" in key and "version" in key:
+        return "low"
+    sev = (severity or "info").lower()
+    if sev in ("critical", "high"):
+        return "medium"
+    return sev
+
 
 class HeadersAnalyzerModule(BaseModule):
     name = "HTTP Security Headers Analyzer"
@@ -143,9 +158,10 @@ class HeadersAnalyzerModule(BaseModule):
                     else:
                         missing.append(header_name)
                         self.log(f"  [FAIL] {header_name}: NOT SET", "warn")
+                        sev = _cap_header_severity(config["title"], config["severity"])
                         findings.append(
                             Finding(
-                                severity=config["severity"],
+                                severity=sev,
                                 title=config["title"],
                                 description=config["description"],
                                 phase=self.phase,
@@ -154,7 +170,7 @@ class HeadersAnalyzerModule(BaseModule):
                             )
                         )
                         self.finding(
-                            config["severity"],
+                            sev,
                             config["title"],
                             config["description"][:100],
                             cvss_score=config["cvss_score"],
@@ -234,9 +250,10 @@ class HeadersAnalyzerModule(BaseModule):
         for keyword, config in CSP_DANGEROUS_DIRECTIVES.items():
             if keyword in csp:
                 self.log(f"  [WARN] CSP contains '{keyword}'", "warn")
+                sev = _cap_header_severity(config["title"], config["severity"])
                 findings.append(
                     Finding(
-                        severity=config["severity"],
+                        severity=sev,
                         title=config["title"],
                         description=config["description"],
                         phase=self.phase,
@@ -244,8 +261,8 @@ class HeadersAnalyzerModule(BaseModule):
                         cvss_score=config["cvss_score"],
                     )
                 )
-                self.finding(config["severity"], config["title"], config["description"][:100], cvss_score=config["cvss_score"])
-                self.asset("config", "CSP", f"CSP directive: {keyword}", config["severity"], category="csp")
+                self.finding(sev, config["title"], config["description"][:100], cvss_score=config["cvss_score"])
+                self.asset("config", "CSP", f"CSP directive: {keyword}", sev, category="csp")
 
         directives = csp.split(";")
         for directive in directives:
@@ -265,9 +282,10 @@ class HeadersAnalyzerModule(BaseModule):
                     title = f"Weak CSP: Wildcard Source in {directive_name}"
                     desc = f"CSP directive '{directive_name}' uses wildcard source '*', allowing resources from any origin."
                     self.log(f"  [WARN] Wildcard '*' in {directive_name}", "warn")
+                    sev = _cap_header_severity(title, "high")
                     findings.append(
                         Finding(
-                            severity="high",
+                            severity=sev,
                             title=title,
                             description=desc,
                             phase=self.phase,
@@ -275,8 +293,8 @@ class HeadersAnalyzerModule(BaseModule):
                             cvss_score=6.0,
                         )
                     )
-                    self.finding("high", title, desc[:100], cvss_score=6.0)
-                    self.asset("config", "CSP", f"Wildcard in {directive_name}", "high", category="csp")
+                    self.finding(sev, title, desc[:100], cvss_score=6.0)
+                    self.asset("config", "CSP", f"Wildcard in {directive_name}", sev, category="csp")
 
                 if src.strip().startswith("data:"):
                     title = f"Weak CSP: data: URI in {directive_name}"
