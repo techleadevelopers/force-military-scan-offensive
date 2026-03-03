@@ -1,5 +1,9 @@
 FROM node:20-alpine
 
+# Install Python runtime for sniper/orchestrator engines
+RUN apk add --no-cache python3 py3-pip \
+  && ln -sf python3 /usr/bin/python
+
 # Use backend repo as build context; place it under /app/backend to match runtime paths
 WORKDIR /app
 
@@ -9,6 +13,7 @@ COPY . ./backend
 # Install deps inside backend folder
 WORKDIR /app/backend
 RUN npm ci --omit=dev
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Run from /app so process.cwd() is /app and allowlist.ts resolves /app/backend/scanner/allowlist.json
 WORKDIR /app
@@ -16,6 +21,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV FORCE_STATIC=1
+ENV PYTHON_BIN=python3
 
 EXPOSE 8080
 
