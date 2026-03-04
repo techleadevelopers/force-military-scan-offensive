@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "NODE_ENV=production PORT=${PORT:-8080} npx tsx server/index.ts",
+    "start": "NODE_ENV=production PORT=${PORT:-8000} npx tsx server/index.ts",
     "dev": "npx tsx server/index.ts"
   },
   "dependencies": {
