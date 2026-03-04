@@ -5,6 +5,8 @@
     "forcescan.app",
     "*.forcescan.app",
     "picpay.com",
-    "*.picpay.com"
+    "*.picpay.com",
+    "www.forcescan.site",
+    "*.www.forcescan.site"
   ]
 }
