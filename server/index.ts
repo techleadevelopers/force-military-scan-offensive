@@ -60,7 +60,6 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, try again later" },
-  // Allow high-frequency polling from the admin sniper status endpoint without tripping rate limit
   skip: (req) => req.path.startsWith("/api/admin/sniper/scan"),
 });
 
