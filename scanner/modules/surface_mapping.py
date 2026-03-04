@@ -190,6 +190,7 @@ class SurfaceMappingModule(BaseModule):
             discovered = deep_results
 
         if not discovered:
+            # Avoid polluting logs with repeated DNS failures for common subdomains
             self.log("No additional subdomains discovered", "info")
             return findings
 
@@ -233,6 +234,8 @@ class SurfaceMappingModule(BaseModule):
 
     def _scan_wordlist(self, base_domain: str, wordlist: list) -> list:
         discovered = []
+        noisy_failures = 0
+        MAX_NOISY = 3  # cap DNS failure logs to reduce clutter
         for sub in wordlist:
             fqdn = f"{sub}.{base_domain}"
             if fqdn == base_domain:
@@ -243,7 +246,9 @@ class SurfaceMappingModule(BaseModule):
                     discovered.append({"subdomain": fqdn, "ips": ips, "common": sub})
                     self.log(f"  Subdomain discovered: {fqdn} -> {ips}", "success")
             except Exception as e:
-                self.log(f"DNS resolve failed for {fqdn}: {e}", "debug")
+                if noisy_failures < MAX_NOISY:
+                    self.log(f"DNS resolve failed for {fqdn}: {e}", "debug")
+                noisy_failures += 1
         return discovered
 
     def _resolve_dns(self, fqdn: str):
