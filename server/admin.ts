@@ -1937,7 +1937,7 @@ adminRouter.get("/api/admin/sniper/latest-findings", async (req: Request, res: R
 // Allow overriding dump directory (useful in Windows where Temp can be cleaned)
 export const DUMPS_DIR = process.env.DUMPS_DIR || path.join(os.tmpdir(), "mse-dumps");
 if (!fs.existsSync(DUMPS_DIR)) fs.mkdirSync(DUMPS_DIR, { recursive: true });
-console.log(`[dumps] storing exfil dumps at: ${DUMPS_DIR}`);
+// console.log(`[dumps] storing exfil dumps at: ${DUMPS_DIR}`);
 
 interface DumpFile {
   id: string;
