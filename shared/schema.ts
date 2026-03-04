@@ -7,6 +7,9 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  firstName: text("first_name").notNull().default(""),
+  taxId: text("tax_id").notNull().default(""),
+  birthDate: text("birth_date").notNull().default(""),
   role: text("role").notNull().default("user"),
   plan: text("plan").notNull().default("free"),
   scansThisMonth: integer("scans_this_month").notNull().default(0),
@@ -65,9 +68,30 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const paymentIntents = pgTable("payment_intents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  scanId: varchar("scan_id").references(() => scans.id),
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("BRL"),
+  status: text("status").notNull().default("PENDING"),
+  gateway: text("gateway").notNull().default("PAGBANK_PIX"),
+  externalOrderId: text("external_order_id"),
+  externalChargeId: text("external_charge_id"),
+  referenceId: text("reference_id"),
+  qrCodeText: text("qr_code_text"),
+  qrCodeUrl: text("qr_code_url"),
+  expiresAt: timestamp("expires_at"),
+  idempotencyKey: text("idempotency_key"),
+  paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,
+  firstName: true,
 });
 
 export const insertScanSchema = createInsertSchema(scans).pick({
@@ -95,6 +119,23 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).pick({
   details: true,
 });
 
+export const insertPaymentIntentSchema = createInsertSchema(paymentIntents).pick({
+  userId: true,
+  scanId: true,
+  amountCents: true,
+  currency: true,
+  status: true,
+  gateway: true,
+  externalOrderId: true,
+  externalChargeId: true,
+  referenceId: true,
+  qrCodeText: true,
+  qrCodeUrl: true,
+  expiresAt: true,
+  idempotencyKey: true,
+  paidAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertScan = z.infer<typeof insertScanSchema>;
@@ -105,3 +146,5 @@ export type InsertScanResult = z.infer<typeof insertScanResultSchema>;
 export type ScanResult = typeof scanResults.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertPaymentIntent = z.infer<typeof insertPaymentIntentSchema>;
+export type PaymentIntent = typeof paymentIntents.$inferSelect;
