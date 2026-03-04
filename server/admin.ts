@@ -188,7 +188,7 @@ adminRouter.get("/api/admin/me", async (req: Request, res: Response) => {
   if (!userId) return res.status(401).json({ error: "Not authenticated" });
   const user = await storage.getUser(userId);
   if (!user) return res.status(401).json({ error: "User not found" });
-  return res.json({ role: user.role, email: user.email });
+  return res.json({ role: user.role, email: user.email, plan: user.plan, name: user.firstName });
 });
 
 adminRouter.get("/api/admin/diagnostic/scan/:scanId", requireAdmin, async (req: Request, res: Response) => {
