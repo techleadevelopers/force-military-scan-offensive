@@ -381,9 +381,9 @@ export async function generateEnterprisePdf(payload: EnterpriseReportPayload): P
     doc.moveDown(0.8);
   }
 
-  // Motor 11 â€” DecisÃ£o AutÃ´noma
+  // Motor 11  DecisÃ£o AutÃ´noma
   if (payload.motor11?.topAcoes || payload.motor11?.autoExecutadas || payload.motor11?.planoAtaque) {
-    addSectionTitle(doc, "Motor 11 â€” DecisÃ£o AutÃ´noma");
+    addSectionTitle(doc, "Motor 11  DecisÃ£o AutÃ´noma");
     if (payload.motor11.planoAtaque?.length) {
       doc.font("Helvetica-Bold").fillColor(colors.text).fontSize(11).text("Plano de ataque (Top 3):");
       addBulletList(doc, payload.motor11.planoAtaque, 5, colors.text);
@@ -398,7 +398,7 @@ export async function generateEnterprisePdf(payload: EnterpriseReportPayload): P
     }
     doc.moveDown(0.6);
   } else {
-    addSectionTitle(doc, "Motor 11 â€” DecisÃ£o AutÃ´noma");
+    addSectionTitle(doc, "Motor 11  DecisÃ£o AutÃ´noma");
     doc.font("Helvetica").fillColor(colors.mute).fontSize(10).text("Nenhuma aÃ§Ã£o autÃ´noma registrada.");
     doc.moveDown(0.6);
   }
