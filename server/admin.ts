@@ -257,49 +257,6 @@ adminRouter.get("/api/admin/stats", async (_req: Request, res: Response) => {
 });
 
 adminRouter.get("/api/admin/databridge", async (_req: Request, res: Response) => {
-  // Auto-hydrate relay from recent dumps if memory state is empty
-  if (
-    credentialRelay.credentials.length === 0 &&
-    credentialRelay.infraSecrets.length === 0 &&
-    credentialRelay.dbCredentials.length === 0 &&
-    credentialRelay.sessionTokens.length === 0 &&
-    credentialRelay.discoveredUsers.length === 0
-  ) {
-    const recent = dumpRegistry.slice(0, 20);
-    for (const d of recent) {
-      if (d.category === "infra_secrets" && Array.isArray(d.items)) {
-        relayIngest(
-          d.items.map((v: string) => ({
-            key: "INFRA_SECRET",
-            value: v,
-            type: "SECRET",
-            source: d.filename,
-            target: d.target || "N/A",
-            capturedAt: d.createdAt || new Date().toISOString(),
-          }))
-        );
-      }
-      if (d.category === "database" && Array.isArray(d.items)) {
-        relayIngest(
-          d.items.map((v: string) => ({
-            key: "DB_URI",
-            value: v,
-            type: "URL",
-            source: d.filename,
-            target: d.target || "N/A",
-            capturedAt: d.createdAt || new Date().toISOString(),
-          }))
-        );
-      }
-      if (d.category === "session_tokens" && Array.isArray(d.items)) {
-        relayIngestTokens(d.items);
-      }
-      if (d.category === "idor_dumps" && Array.isArray(d.items)) {
-        relayIngestUsers(d.items);
-      }
-    }
-  }
-
   return res.json({
     type: "CREDENTIAL_RELAY_DATABRIDGE",
     status: "ACTIVE",
