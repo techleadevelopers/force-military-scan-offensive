@@ -7,6 +7,9 @@ import { z } from "zod";
 const registerSchema = insertUserSchema.extend({
   email: z.string().email().max(255),
   password: z.string().min(8).max(128),
+  firstName: z.string().min(2).max(60),
+  taxId: z.string().trim().min(11).max(14).optional(),
+  birthDate: z.string().trim().optional(),
 });
 
 const loginSchema = z.object({
@@ -15,6 +18,11 @@ const loginSchema = z.object({
 });
 
 export const authRouter = Router();
+
+const taxIdUpdateSchema = z.object({
+  taxId: z.string().trim().min(11).max(14),
+  birthDate: z.string().trim().optional(),
+});
 
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
@@ -29,16 +37,21 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     }
 
     const hashedPassword = await bcrypt.hash(parsed.data.password, 12);
+    const firstName = parsed.data.firstName.trim().split(/\s+/)[0];
     const user = await storage.createUser({
       email: parsed.data.email,
       password: hashedPassword,
+      firstName,
+      taxId: parsed.data.taxId?.trim() || "",
+      birthDate: parsed.data.birthDate?.trim() || "",
     });
 
     (req.session as any).userId = user.id;
 
-    return res.status(201).json({
+        return res.status(201).json({
       id: user.id,
       email: user.email,
+      name: user.firstName,
       plan: user.plan,
       createdAt: user.createdAt,
     });
@@ -67,9 +80,12 @@ authRouter.post("/login", async (req: Request, res: Response) => {
 
     (req.session as any).userId = user.id;
 
-    return res.json({
+        return res.json({
       id: user.id,
       email: user.email,
+      name: user.firstName,
+      taxId: user.taxId,
+      birthDate: user.birthDate,
       plan: user.plan,
       createdAt: user.createdAt,
     });
@@ -101,9 +117,10 @@ authRouter.get("/me", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "User not found" });
     }
 
-    return res.json({
+        return res.json({
       id: user.id,
       email: user.email,
+      name: user.firstName,
       plan: user.plan,
       scansThisMonth: user.scansThisMonth,
       apiKey: user.apiKey,
@@ -112,5 +129,28 @@ authRouter.get("/me", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("Auth me error:", err);
     return res.status(500).json({ error: "Failed to fetch user" });
+  }
+});
+
+// Atualiza CPF / nascimento
+authRouter.patch("/taxid", async (req: Request, res: Response) => {
+  const userId = (req.session as any)?.userId;
+  if (!userId) return res.status(401).json({ error: "Not authenticated" });
+
+  const parsed = taxIdUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
+  }
+
+  try {
+    const updated = await storage.updateUser(userId, {
+      taxId: parsed.data.taxId.trim(),
+      birthDate: parsed.data.birthDate?.trim() || "",
+    });
+    if (!updated) return res.status(404).json({ error: "User not found" });
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error("Update taxId error:", err);
+    return res.status(500).json({ error: "Failed to update taxId" });
   }
 });
