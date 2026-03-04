@@ -1,12 +1,13 @@
-import { eq, desc, sql, count } from "drizzle-orm";
+import { eq, desc, sql, count, and } from "drizzle-orm";
 import { db } from "./db";
 import {
   users, scans, subscriptions, auditLogs,
-  scanResults,
+  scanResults, paymentIntents,
   type User, type InsertUser, type Scan, type InsertScan,
   type Subscription, type InsertSubscription,
   type AuditLog, type InsertAuditLog,
-  type ScanResult, type InsertScanResult
+  type ScanResult, type InsertScanResult,
+  type PaymentIntent, type InsertPaymentIntent
 } from "../shared/schema";
 
 export interface IStorage {
@@ -34,6 +35,13 @@ export interface IStorage {
   getAllScans(limit?: number): Promise<Scan[]>;
   getAllAuditLogs(limit?: number): Promise<AuditLog[]>;
   getAdminStats(): Promise<{ totalUsers: number; totalScans: number; activeSubscriptions: number; totalFindings: number; criticalFindings: number; highFindings: number }>;
+
+  createPaymentIntent(data: InsertPaymentIntent): Promise<PaymentIntent>;
+  updatePaymentIntent(id: string, data: Partial<PaymentIntent>): Promise<PaymentIntent | undefined>;
+  getPaymentIntentById(id: string): Promise<PaymentIntent | undefined>;
+  getPaymentIntentByReference(referenceId: string): Promise<PaymentIntent | undefined>;
+  getConfirmedPaymentForScan(userId: string, scanId: string): Promise<PaymentIntent | undefined>;
+  getRecentConfirmedPayment(userId: string, hours: number): Promise<PaymentIntent | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -119,6 +127,57 @@ export class DatabaseStorage implements IStorage {
 
   async getAllAuditLogs(limit = 200): Promise<AuditLog[]> {
     return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit);
+  }
+
+  async createPaymentIntent(data: InsertPaymentIntent): Promise<PaymentIntent> {
+    const [pi] = await db.insert(paymentIntents).values(data).returning();
+    return pi;
+  }
+
+  async updatePaymentIntent(id: string, data: Partial<PaymentIntent>): Promise<PaymentIntent | undefined> {
+    const [pi] = await db.update(paymentIntents).set(data).where(eq(paymentIntents.id, id)).returning();
+    return pi;
+  }
+
+  async getPaymentIntentById(id: string): Promise<PaymentIntent | undefined> {
+    const [pi] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, id));
+    return pi;
+  }
+
+  async getPaymentIntentByReference(referenceId: string): Promise<PaymentIntent | undefined> {
+    const [pi] = await db.select().from(paymentIntents).where(eq(paymentIntents.referenceId, referenceId));
+    return pi;
+  }
+
+  async getConfirmedPaymentForScan(userId: string, scanId: string): Promise<PaymentIntent | undefined> {
+    const [pi] = await db
+      .select()
+      .from(paymentIntents)
+      .where(
+        and(
+          eq(paymentIntents.userId, userId),
+          eq(paymentIntents.scanId, scanId),
+          eq(paymentIntents.status, "CONFIRMED")
+        )
+      );
+    return pi;
+  }
+
+  async getRecentConfirmedPayment(userId: string, hours: number): Promise<PaymentIntent | undefined> {
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const [pi] = await db
+      .select()
+      .from(paymentIntents)
+      .where(
+        and(
+          eq(paymentIntents.userId, userId),
+          eq(paymentIntents.status, "CONFIRMED"),
+          sql`${paymentIntents.paidAt} >= ${since}`
+        )
+      )
+      .orderBy(desc(paymentIntents.paidAt ?? paymentIntents.updatedAt ?? paymentIntents.createdAt))
+      .limit(1);
+    return pi;
   }
 
   async getScansByTarget(target: string, limit = 5): Promise<Scan[]> {
