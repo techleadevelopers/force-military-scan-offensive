@@ -245,6 +245,152 @@ adminRouter.get("/api/admin/diagnostic/scan/:scanId", requireAdmin, async (req: 
   }
 });
 
+// Public sniper endpoints (visitor flow: allow running scan but gate sensitive content in frontend)
+adminRouter.post("/api/public/sniper/pipeline", async (req: Request, res: Response) => {
+  const { target } = req.body;
+  if (!target) return res.status(400).json({ error: "Target URL required" });
+
+  const validation = validateSniperTarget(target);
+  if (!validation.valid) return res.status(403).json({ error: validation.error });
+
+  const timestamp = formatTimestamp();
+  const userId = (req.session as any)?.userId || null;
+  const io: any = (req.app as any).get("io");
+
+  try {
+    const hostname = addToAllowlist(target);
+    log(`[SNIPER PIPELINE][PUBLIC] Allowlisted '${hostname}', launching unified 5-phase pipeline → ${target}`, "admin");
+
+    const scan = await storage.createScan({
+      userId,
+      target: validation.url,
+      consentIp: req.ip || "public",
+      consentAt: new Date(),
+    });
+
+    const scanState: any = {
+      status: "running",
+      scanId: scan.id,
+      target: validation.url,
+      events: [],
+      findings: [],
+      exposedAssets: [],
+      telemetry: {},
+      phases: {},
+      counts: { total: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      startedAt: Date.now(),
+      probes: [],
+      pipelineReport: null,
+      decisionIntelReport: null,
+      adversarialReport: null,
+      chainIntelReport: null,
+      hackerReasoningReport: null,
+      dbValidationReport: null,
+      infraReport: null,
+      sniperReport: null,
+    };
+    activeSniperScans.set(scan.id, scanState);
+
+    await storage.createAuditLog({
+      userId,
+      action: "SNIPER:PIPELINE_START_PUBLIC",
+      target: validation.url,
+      ip: req.ip || "unknown",
+      details: { scanId: scan.id, hostname, timestamp, pipelineVersion: "3.0" },
+    });
+
+    const proc = spawn(PYTHON_BIN, ["-m", "scanner.sniper_pipeline", validation.url, scan.id], {
+      cwd: BACKEND_ROOT,
+      env: { ...process.env, PYTHONUNBUFFERED: "1" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    proc.on("error", (err: any) => {
+      const msg = `[SNIPER PIPELINE][PUBLIC] spawn error: ${err?.message || err}`;
+      log(msg, "admin");
+      const state = activeSniperScans.get(scan.id);
+      if (state) {
+        state.status = "error";
+        state.error = msg;
+      }
+    });
+
+    const rl = readline.createInterface({ input: proc.stdout! });
+
+    rl.on("line", (line: string) => {
+      try {
+        const event = JSON.parse(line);
+        const eventType = event.event;
+        const eventData = event.data;
+        const state = activeSniperScans.get(scan.id);
+        if (!state) return;
+
+        state.events.push({ event: eventType, data: eventData, timestamp: Date.now() });
+
+        if (eventType === "pipeline:finding_detected" && eventData) {
+          state.findings.push(eventData);
+          state.counts.total += 1;
+          const sev = (eventData.severity || "").toLowerCase();
+          if (["critical", "high", "medium", "low", "info"].includes(sev)) {
+            // @ts-ignore
+            state.counts[sev] += 1;
+          }
+        }
+
+        if (eventType === "pipeline:probe_result" && eventData) {
+          state.probes.push(eventData);
+        }
+
+        if (eventType === "sniper:sniper_report" || eventType === "pipeline:pipeline_report") {
+          state.sniperReport = eventData.sniper_report || eventData;
+        }
+
+        if (eventType === "pipeline:telemetry") {
+          state.telemetry = eventData;
+        }
+
+        if (eventType === "pipeline:phase_update") {
+          state.phases[eventData.phase] = eventData.status;
+        }
+
+        if (eventType === "pipeline:decision_intel") state.decisionIntelReport = eventData;
+        if (eventType === "pipeline:adversarial_report") state.adversarialReport = eventData;
+        if (eventType === "pipeline:chain_intel") state.chainIntelReport = eventData;
+        if (eventType === "pipeline:hacker_reasoning") state.hackerReasoningReport = eventData;
+        if (eventType === "pipeline:db_validation") state.dbValidationReport = eventData;
+        if (eventType === "pipeline:infra_report") state.infraReport = eventData;
+
+        io.to(scan.id).emit("sniper:event", { scanId: scan.id, eventType, data: eventData, target: validation.url, timestamp: Date.now() });
+      } catch (err: any) {
+        log(`[SNIPER PIPELINE][PUBLIC] line parse error: ${err?.message || err}`, "admin");
+      }
+    });
+
+    proc.stderr?.on("data", (chunk: any) => {
+      const msg = chunk.toString();
+      log(`[SNIPER PIPELINE][PUBLIC] stderr: ${msg}`, "admin");
+    });
+
+    proc.on("close", (code: number) => {
+      const state = activeSniperScans.get(scan.id);
+      if (state) state.status = code === 0 ? "completed" : "error";
+      io.to(scan.id).emit("sniper:event", { scanId: scan.id, eventType: "pipeline:completed", data: { status: state?.status || "error" }, timestamp: Date.now(), target: validation.url });
+    });
+
+    return res.json({ scanId: scan.id, target: validation.url, status: "running", message: `Public pipeline launched: ${validation.url}` });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to launch recon: " + err.message });
+  }
+});
+
+adminRouter.get("/api/public/sniper/scan/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const state = activeSniperScans.get(id);
+  if (!state) return res.status(404).json({ error: "Scan not found" });
+  return res.json(state);
+});
+
+// Private/admin endpoints below
 adminRouter.use("/api/admin", requireAdmin as any);
 
 adminRouter.get("/api/admin/stats", async (_req: Request, res: Response) => {
