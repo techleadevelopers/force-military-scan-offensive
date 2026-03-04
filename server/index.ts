@@ -60,6 +60,8 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, try again later" },
+  // Allow high-frequency polling from the admin sniper status endpoint without tripping rate limit
+  skip: (req) => req.path.startsWith("/api/admin/sniper/scan"),
 });
 
 app.use("/api/", apiLimiter);
@@ -74,6 +76,8 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
+
+// (Removed) fake secret injection middleware.
 
 // Fallback para JSON malformado (ex.: {target:https://foo} vindo do frontend antigo)
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
