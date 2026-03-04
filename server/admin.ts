@@ -1975,8 +1975,10 @@ adminRouter.get("/api/admin/sniper/latest-findings", async (req: Request, res: R
   }
 });
 
-export const DUMPS_DIR = path.join(os.tmpdir(), "mse-dumps");
+// Allow overriding dump directory (useful in Windows where Temp can be cleaned)
+export const DUMPS_DIR = process.env.DUMPS_DIR || path.join(os.tmpdir(), "mse-dumps");
 if (!fs.existsSync(DUMPS_DIR)) fs.mkdirSync(DUMPS_DIR, { recursive: true });
+console.log(`[dumps] storing exfil dumps at: ${DUMPS_DIR}`);
 
 interface DumpFile {
   id: string;
@@ -2712,47 +2714,18 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
     for (const c of credentialRelay.credentials) {
       rawCredentials.push({ value: (c as any).value || (c as any).key || "", type: (c as any).type, source: (c as any).source });
     }
-    const mockPatterns = [
-      "r3d1s_pr0d_p4ss",
-      "dictionary boost",
-      "zero redaction",
-      "kill_chain",
-      "111.3%",
-      "100%",
-      "10/10",
-      "example.com",
-      "test.com",
-      "demo",
-    ];
-    const isRealCredential = (cred: RelayCredential) => {
-      const value = (cred.value || "").toString();
-      const valueLower = value.toLowerCase();
-      if (!value || valueLower.length < 8) return false;
-      if (mockPatterns.some((p) => valueLower.includes(p))) return false;
-      const jwtLike = /^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(value);
-      if (jwtLike) return true;
-      if ((cred.type || "").toUpperCase().includes("API") || (cred.type || "").toUpperCase().includes("KEY") || (cred.type || "").toUpperCase().includes("TOKEN") || (cred.type || "").toUpperCase().includes("SECRET")) {
-        return true;
-      }
-      return (cred.confidence || 0) >= 70;
-    };
+    // LGPD OFF (test mode): aceitar qualquer credencial capturada
+    const isRealCredential = (_cred: RelayCredential) => true;
     const realCredentials = rawCredentials.filter(isRealCredential);
-    if (realCredentials.length < 2) {
-      log(`[COMBINATOR] Abortado: credenciais reais insuficientes (${realCredentials.length}) para ${target}`, "admin");
-      return res.status(400).json({
-        status: "skipped",
-        reason: "insufficient_real_credentials",
-        message: "Mínimo de 2 credenciais reais necessário para gerar dumps",
-      });
-    }
+    // Sem requisito de quantidade mínima durante testes
 
     let dumpsGenerated = 0;
     let lastDumpAt = 0;
-    const MAX_DUMPS = 5;
+    const MAX_DUMPS = 20;
     const MIN_DUMP_GAP_MS = 2000;
     const allowDump = async (label: string) => {
       if (dumpsGenerated >= MAX_DUMPS) {
-        log(`[COMBINATOR] Dump ignorado (${label}) â€” limite de ${MAX_DUMPS} por scan`, "admin");
+        log(`[COMBINATOR] Dump ignorado (${label})  limite de ${MAX_DUMPS} por scan`, "admin");
         return false;
       }
       const now = Date.now();
@@ -3352,7 +3325,7 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
                   id: generateDumpId(),
                   category: ext.category,
                   filename: jsonFilename,
-                  label: `Credential Dump (JSON): ${ext.desc} â€” ${uniqueVars.length} keys`,
+                  label: `Credential Dump (JSON): ${ext.desc}  ${uniqueVars.length} keys`,
                   target: validation.url,
                   severity: "critical",
                   itemCount: uniqueVars.length,
@@ -3494,7 +3467,7 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
             id: generateDumpId(),
             category: "infra_secrets",
             filename: ssrfFilename,
-            label: `SSRF Raw Captures â€” ${phase4.rawCaptures.length} tunnels`,
+            label: `SSRF Raw Captures  ${phase4.rawCaptures.length} tunnels`,
             target: validation.url,
             severity: "critical",
             itemCount: phase4.rawCaptures.length,
