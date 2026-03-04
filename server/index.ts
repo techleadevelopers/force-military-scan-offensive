@@ -105,7 +105,14 @@ const PgStore = connectPgSimple(session);
 app.use(
   session({
     store: new PgStore({ pool: pool as any, createTableIfMissing: true }),
-    secret: process.env.SESSION_SECRET || "mse-dev-secret-change-in-prod",
+    secret: (() => {
+      const sec = process.env.SESSION_SECRET;
+      if (!sec) {
+        console.error("[FATAL] SESSION_SECRET is not set. Refuse to start without a real secret.");
+        process.exit(1);
+      }
+      return sec;
+    })(),
     resave: false,
     saveUninitialized: false,
     name: "mse.sid",
@@ -117,23 +124,6 @@ app.use(
     },
   })
 );
-
-// Temporary autologin as admin to bypass UI login during tests (always on)
-app.use(async (req, _res, next) => {
-  const session = req.session as any;
-  if (!session?.userId) {
-    const email = "admin@mse.dev";
-    let user = await storage.getUserByEmail(email);
-    if (!user) {
-      const bcrypt = await import("bcryptjs");
-      const hash = await bcrypt.hash("dev-admin", 10);
-      user = await storage.createUser({ email, password: hash, role: "admin" });
-    }
-    await storage.updateUser(user.id, { role: "admin", plan: "pro" });
-    session.userId = user.id;
-  }
-  next();
-});
 
 app.use("/api/auth", authRouter);
 app.use(adminRouter);
