@@ -222,7 +222,11 @@ class SniperEngine:
 
         self.report.completed_at = self._ts()
         self.report.total_probes = len(self.report.probes)
-        self.report.vulnerabilities_confirmed = sum(1 for p in self.report.probes if p.vulnerable)
+        # Align "critical" calculation with the main scan report:
+        # count only probes explicitly marked as critical severity.
+        self.report.vulnerabilities_confirmed = sum(
+            1 for p in self.report.probes if str(p.severity).lower() == "critical"
+        )
 
         vuln_count = self.report.vulnerabilities_confirmed
         total = self.report.total_probes
