@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import express from "express";
 import { type Server } from "http";
 import { Server as SocketServer } from "socket.io";
 import { spawn, type ChildProcess } from "child_process";
@@ -13,10 +14,26 @@ import * as path from "path";
 import { generateEnterprisePdf, type EnterpriseReportPayload } from "./report";
 import { evaluateMockPatterns } from "./mockValidator";
 import { loadAllowlistStrict, writeAllowlistStrict } from "./allowlist";
+import { guardPlan, consumeScan, normalizePlan } from "./plan/limits";
+import { PagBankService } from "./payments/pagbank-service";
+import { hasPaidAccess } from "./payments/access";
+import { storage } from "./storage";
 
 const BACKEND_ROOT = path.join(process.cwd(), "backend");
 const PYTHON_BIN = process.env.PYTHON_BIN || process.env.PYTHON || "python";
 loadAllowlistStrict(); // fail fast if allowlist is invalid or polluted
+
+function safeParseJson(body: any) {
+  const str = Buffer.isBuffer(body) ? body.toString("utf-8") : typeof body === "string" ? body : null;
+  if (!str) return null;
+  try { return JSON.parse(str); } catch { return null; }
+}
+
+const pagBankService = new PagBankService(
+  process.env.PAGSEGURO_API_TOKEN || "",
+  process.env.PAGSEGURO_API_BASE_URL || "https://api.pagseguro.com",
+  process.env.API_BASE_URL || process.env.VERCEL_URL || ""
+);
 
 function addTargetToAllowlist(target: string): { hostname: string; added: boolean } | null {
   const fullUrl = target.includes("://") ? target : `https://${target}`;
@@ -165,6 +182,15 @@ export async function registerRoutes(
       const target = req.body?.target;
       if (!target) return res.status(400).json({ error: "Target URL required" });
 
+      const guard = await guardPlan(user.id, "api_scan");
+      if (!guard.allowed || !guard.user) {
+        return res.status(403).json({
+          error: guard.message || "Plan limit reached",
+          plan: guard.plan,
+        });
+      }
+      await consumeScan(guard.user);
+
       const scan = await storage.createScan({
         userId: user.id,
         target,
@@ -208,6 +234,14 @@ export async function registerRoutes(
     }
 
     try {
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const scanIdFromPayload = (report as any).metadata?.scanId || (report as any).panorama?.scanId || null;
+      const paid = await hasPaidAccess(userId, scanIdFromPayload, user.plan);
+      if (!paid && user.role !== "admin") {
+        return res.status(402).json({ error: "Payment required to download PDF" });
+      }
+
       const pdfBuffer = await generateEnterprisePdf(report);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", "attachment; filename=\"forcescan-enterprise.pdf\"");
@@ -261,6 +295,111 @@ export async function registerRoutes(
     }
   });
 
+  // Payments - PIX (PagBank)
+  app.post("/api/payments/pix", async (req: Request, res: Response) => {
+    const userId = getSessionUserId(req);
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+    const scanId = req.body?.scanId as string | undefined;
+    try {
+      const user = await storage.getUser(userId);
+      const taxId = (user?.taxId || "").replace(/\D/g, "");
+      if (!taxId) {
+        return res.status(400).json({ error: "CPF obrigatório para gerar o PIX" });
+      }
+      const amountCents = Number(process.env.PAY_PER_SCAN_CENTS || 3990);
+      const result = await pagBankService.createPixOrder({
+        userId,
+        scanId: scanId || null,
+        amountCents,
+        description: "Desbloqueio de relatório Forcescan",
+        taxId,
+      });
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(400).json({ error: err?.message || "Failed to create PIX order" });
+    }
+  });
+
+  app.get("/api/payments/:intentId/status", async (req: Request, res: Response) => {
+    const userId = getSessionUserId(req);
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+    const intentId = req.params.intentId;
+    const intent = await storage.getPaymentIntentById(intentId);
+    if (!intent || intent.userId !== userId) return res.status(404).json({ error: "Not found" });
+    return res.json({ status: intent.status, paidAt: intent.paidAt });
+  });
+
+  app.post("/api/payments/webhook/pix", express.raw({ type: "*/*" }), async (req: Request, res: Response) => {
+    try {
+      // optional shared secret
+      const provided = (req.headers["x-pix-secret"] as string) || "";
+      const expected = process.env.PIX_WEBHOOK_SECRET || "";
+      if (expected && provided !== expected) return res.status(401).send("invalid secret");
+
+      const payload = safeParseJson(req.body) ?? req.body;
+      const result = await pagBankService.finalizeFromWebhook(payload);
+      return res.status(200).json({ ok: true, updated: result.updated });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || "Webhook error" });
+    }
+  });
+
+  // Card session (PagBank)
+  app.post("/api/payments/card/session", async (req: Request, res: Response) => {
+    const userId = getSessionUserId(req);
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+    try {
+      const sessionId = await pagBankService.createCardSession();
+      return res.json({ sessionId });
+    } catch (err: any) {
+      return res.status(400).json({ error: err?.message || "Failed to create card session" });
+    }
+  });
+
+  // Card public key (PagBank) - used by frontend encryptCard
+  app.get("/api/payments/card/public-key", async (req: Request, res: Response) => {
+    const userId = getSessionUserId(req);
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+    try {
+      const publicKey = await pagBankService.getPublicKey();
+      return res.json({ publicKey });
+    } catch (err: any) {
+      return res.status(400).json({ error: err?.message || "Failed to fetch public key" });
+    }
+  });
+
+  // Payments - Card (PagBank)
+  app.post("/api/payments/card", async (req: Request, res: Response) => {
+    const userId = getSessionUserId(req);
+    if (!userId) return res.status(401).json({ error: "Not authenticated" });
+
+    const { scanId, cardToken, installments = 1, description } = req.body || {};
+    if (!cardToken) return res.status(400).json({ error: "cardToken required" });
+
+    try {
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const taxId = (user.taxId || "").replace(/\D/g, "");
+      if (!taxId) return res.status(400).json({ error: "CPF obrigatório para gerar o pagamento" });
+
+      const amountCents = Number(process.env.PAY_PER_SCAN_CENTS || 3990);
+      const result = await pagBankService.createCardOrder({
+        userId,
+        scanId: scanId || null,
+        amountCents,
+        description: description || "Desbloqueio de relatório Forcescan",
+        taxId,
+        holderName: user.firstName || "Forcescan User",
+        birthDate: user.birthDate || "",
+        cardToken,
+        installments: Number(installments) || 1,
+      });
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(400).json({ error: err?.message || "Failed to create card order" });
+    }
+  });
+
   app.get("/api/allowlist", (_req, res) => {
     try {
       const data = loadAllowlistStrict();
@@ -296,7 +435,7 @@ export async function registerRoutes(
       }
     });
 
-    socket.on("start_scan", (data: { target: string }) => {
+    socket.on("start_scan", async (data: { target: string }) => {
       if (activeProcess) {
         activeProcess.kill("SIGTERM");
         activeProcess = null;
@@ -334,6 +473,25 @@ export async function registerRoutes(
         return;
       }
 
+      const sessionUserId = (socket.request as any)?.session?.userId || null;
+      if (!sessionUserId) {
+        socket.emit("log_stream", {
+          message: "Authentication required. Please log in to start a scan.",
+          level: "error",
+          phase: "",
+        });
+        return;
+      }
+
+      const guard = await guardPlan(sessionUserId, "scan");
+      if (!guard.allowed || !guard.user) {
+        socket.emit("log_stream", {
+          message: guard.message || "Plan limit reached. Upgrade to continue scanning.",
+          level: "error",
+          phase: "",
+        });
+        return;
+      }
       const fullUrl = target.includes("://") ? target : `https://${target}`;
       let parsedHost: string;
       try {
@@ -356,6 +514,8 @@ export async function registerRoutes(
         });
         return;
       }
+
+      await consumeScan(guard.user);
 
       log(`Starting Python assessment for: ${target}`, "scanner");
 
@@ -388,8 +548,6 @@ export async function registerRoutes(
         scanIdPromise: Promise.resolve(null),
         severityCounts: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
       };
-
-      const sessionUserId = (socket.request as any)?.session?.userId || null;
 
       scanAccumulator.scanIdPromise = (async () => {
         try {
@@ -566,7 +724,7 @@ export async function registerRoutes(
 
     let activeSniperProcess: ChildProcess | null = null;
 
-    socket.on("start_sniper_scan", (data: { targets: string }) => {
+    socket.on("start_sniper_scan", async (data: { targets: string }) => {
       if (activeSniperProcess) {
         activeSniperProcess.kill("SIGTERM");
         activeSniperProcess = null;
@@ -585,6 +743,17 @@ export async function registerRoutes(
         return;
       }
       scanCooldowns.set(`sniper_${socket.id}`, now);
+
+      const sessionUserId = (socket.request as any)?.session?.userId || null;
+      if (!sessionUserId) {
+        socket.emit("sniper_log", { message: "Login required to run Sniper exploitation", level: "error" });
+        return;
+      }
+      const guard = await guardPlan(sessionUserId, "sniper");
+      if (!guard.allowed) {
+        socket.emit("sniper_log", { message: guard.message || "Plan does not allow Sniper exploitation", level: "error" });
+        return;
+      }
 
       const urlList = targets.split(",").map((u: string) => u.trim()).filter((u: string) => u.length > 0);
       if (urlList.length > 100) {
@@ -738,7 +907,7 @@ export async function registerRoutes(
 
     let activeCollectorProcess: ReturnType<typeof spawn> | null = null;
 
-    socket.on("start_auto_collect", (data: { config: string }) => {
+    socket.on("start_auto_collect", async (data: { config: string }) => {
       if (activeCollectorProcess) {
         activeCollectorProcess.kill("SIGTERM");
         activeCollectorProcess = null;
@@ -759,6 +928,17 @@ export async function registerRoutes(
         return;
       }
       scanCooldowns.set(`collector_${socket.id}`, now);
+
+      const sessionUserId = (socket.request as any)?.session?.userId || null;
+      if (!sessionUserId) {
+        socket.emit("collector_log", { message: "Login required to run auto-collector", level: "error" });
+        return;
+      }
+      const guard = await guardPlan(sessionUserId, "collector");
+      if (!guard.allowed) {
+        socket.emit("collector_log", { message: guard.message || "Plan does not allow auto-collector", level: "error" });
+        return;
+      }
 
       log(`[AUTO-COLLECTOR] Starting target collection`, "scanner");
 
