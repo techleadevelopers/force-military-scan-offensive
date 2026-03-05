@@ -474,23 +474,25 @@ export async function registerRoutes(
       }
 
       const sessionUserId = (socket.request as any)?.session?.userId || null;
-      if (!sessionUserId) {
-        socket.emit("log_stream", {
-          message: "Authentication required. Please log in to start a scan.",
-          level: "error",
-          phase: "",
-        });
-        return;
-      }
+      const isGuest = !sessionUserId;
 
-      const guard = await guardPlan(sessionUserId, "scan");
-      if (!guard.allowed || !guard.user) {
+      let guard: any = { allowed: true, user: null, message: null };
+      if (!isGuest) {
+        guard = await guardPlan(sessionUserId, "scan");
+        if (!guard.allowed || !guard.user) {
+          socket.emit("log_stream", {
+            message: guard.message || "Plan limit reached. Upgrade to continue scanning.",
+            level: "error",
+            phase: "",
+          });
+          return;
+        }
+      } else {
         socket.emit("log_stream", {
-          message: guard.message || "Plan limit reached. Upgrade to continue scanning.",
-          level: "error",
+          message: "Modo visitante: execução liberada, resultados serão bloqueados até pagamento.",
+          level: "warn",
           phase: "",
         });
-        return;
       }
       const fullUrl = target.includes("://") ? target : `https://${target}`;
       let parsedHost: string;
@@ -515,7 +517,9 @@ export async function registerRoutes(
         return;
       }
 
-      await consumeScan(guard.user);
+      if (guard.user) {
+        await consumeScan(guard.user);
+      }
 
       log(`Starting Python assessment for: ${target}`, "scanner");
 
@@ -549,20 +553,22 @@ export async function registerRoutes(
         severityCounts: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
       };
 
-      scanAccumulator.scanIdPromise = (async () => {
-        try {
-          const scan = await storage.createScan({
-            userId: sessionUserId,
-            target,
-            status: "running",
-          });
-          log(`[LIFECYCLE] Scan record created: ${scan.id} for target ${target}`, "scanner");
-          return scan.id;
-        } catch (dbErr: any) {
-          log(`[LIFECYCLE] Failed to create scan record: ${dbErr?.message}`, "scanner");
-          return null;
-        }
-      })();
+      scanAccumulator.scanIdPromise = isGuest
+        ? Promise.resolve(null)
+        : (async () => {
+            try {
+              const scan = await storage.createScan({
+                userId: sessionUserId,
+                target,
+                status: "running",
+              });
+              log(`[LIFECYCLE] Scan record created: ${scan.id} for target ${target}`, "scanner");
+              return scan.id;
+            } catch (dbErr: any) {
+              log(`[LIFECYCLE] Failed to create scan record: ${dbErr?.message}`, "scanner");
+              return null;
+            }
+          })();
 
       socket.emit("log_stream", {
         message: `Launching assessment engine for: ${target}`,
