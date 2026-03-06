@@ -1,11 +1,11 @@
-import json
+﻿import json
 from typing import Dict, Any, List
 
 
 class ProbabilityEngine:
     """
     Calcula a probabilidade de sucesso de cada vetor com base em pesos
-    declarados no attack_dictionary.json. Mantém lógica isolada para que
+    declarados no attack_dictionary.json. MantÃ©m lÃ³gica isolada para que
     possamos evoluir para modelos bayesianos sem tocar o executor.
     """
 
@@ -26,7 +26,7 @@ class ProbabilityEngine:
         Aceita 'port_80_open', 'http_400_detected', etc.
         """
         for f in findings:
-            # checa fields genéricos
+            # checa fields genÃ©ricos
             if key in f.values():
                 return True
             if key == "port_80_open" and f.get("port") == 80 and f.get("status", "").lower() != "closed":
@@ -79,7 +79,7 @@ class ProbabilityEngine:
 
         for category in vectors:
             for vector_name, config in vectors[category].items():
-                # pré-requisitos
+                # prÃ©-requisitos
                 if "prerequisites" in config:
                     prereqs_ok = all(self.finding_exists(findings, p) for p in config["prerequisites"])
                     if not prereqs_ok:
@@ -99,3 +99,4 @@ class ProbabilityEngine:
 
         candidates.sort(key=lambda x: x["probability"], reverse=True)
         return candidates[:limit]
+
