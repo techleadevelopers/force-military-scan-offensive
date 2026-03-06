@@ -19,6 +19,10 @@ RUN python3 -m venv /py \
   && pip install --no-cache-dir -r requirements.txt \
   && pip install --no-cache-dir -r scanner/requirements.txt
 
+# Ensure the venv binaries (python/pip) are first on PATH so fallbacks use the
+# environment where httpx and other scanner deps are installed.
+ENV PATH="/py/bin:${PATH}"
+
 # Run from /app so process.cwd() is /app and allowlist.ts resolves /app/backend/scanner/allowlist.json
 WORKDIR /app
 
