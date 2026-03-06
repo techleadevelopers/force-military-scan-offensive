@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 import argparse
 from datetime import datetime
@@ -10,9 +10,9 @@ from scanner.execution_engine import ExecutionEngine
 
 class AutonomousConsolidatorV2:
     """
-    Versão enxuta para orquestração autônoma baseada no Attack Dictionary.
-    Foi desenhada para rodar pós-scan, consumindo um snapshot salvo em disco
-    (ou já carregado em memória).
+    VersÃ£o enxuta para orquestraÃ§Ã£o autÃ´noma baseada no Attack Dictionary.
+    Foi desenhada para rodar pÃ³s-scan, consumindo um snapshot salvo em disco
+    (ou jÃ¡ carregado em memÃ³ria).
     """
 
     def __init__(self, dictionary_path: Optional[str] = None):
@@ -69,7 +69,7 @@ class AutonomousConsolidatorV2:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Motor 11 V2 — snapshot -> decisions -> executions")
+    parser = argparse.ArgumentParser(description="Motor 11 V2 â€” snapshot -> decisions -> executions")
     parser.add_argument("--snapshot", required=True, help="Caminho do snapshot JSON (findings/assets/probes/risk_score)")
     parser.add_argument("--dictionary", help="Caminho custom do attack_dictionary.json")
     args = parser.parse_args()
@@ -77,3 +77,4 @@ if __name__ == "__main__":
     engine = AutonomousConsolidatorV2(dictionary_path=args.dictionary)
     final_report = engine.process_snapshot(args.snapshot)
     print(json.dumps(final_report))
+
