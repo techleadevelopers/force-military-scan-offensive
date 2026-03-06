@@ -1,8 +1,8 @@
-"""
+﻿"""
 MSE Genetic Payload Engine
 ============================
 Evolves payloads like living organisms using genetic algorithms.
-Survival of the fittest — payloads that bypass WAF reproduce,
+Survival of the fittest â€” payloads that bypass WAF reproduce,
 those that get blocked die. Mutation introduces variation.
 """
 
@@ -261,3 +261,4 @@ class GeneticPayloadEngine:
             val = getattr(org, attribute, "unknown")
             dist[val] = dist.get(val, 0) + 1
         return dist
+
