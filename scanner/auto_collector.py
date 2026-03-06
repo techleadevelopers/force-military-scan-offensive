@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import json
 import re
 import os
@@ -142,9 +142,9 @@ class AutoCollector:
                         if count >= self.max_per_source:
                             break
 
-                    emit_log(f"  [CRT.SH] {domain} → {count} subdomain(s)", "success")
+                    emit_log(f"  [CRT.SH] {domain} â†’ {count} subdomain(s)", "success")
                 else:
-                    emit_log(f"  [CRT.SH] {domain} → HTTP {resp.status_code}", "warn")
+                    emit_log(f"  [CRT.SH] {domain} â†’ HTTP {resp.status_code}", "warn")
 
                 await asyncio.sleep(0.5)
 
@@ -152,7 +152,7 @@ class AutoCollector:
                 emit_log(f"  [CRT.SH] {domain} error: {str(e)[:80]}", "warn")
 
         added = len(self.results) - before
-        emit_log(f"[CRT.SH] Complete — {added} unique domain(s) added", "success")
+        emit_log(f"[CRT.SH] Complete â€” {added} unique domain(s) added", "success")
 
     async def collect_from_urlscan(self, queries: List[str]):
         emit_log(f"[URLSCAN] Querying {len(queries)} search(es)...", "info")
@@ -174,9 +174,9 @@ class AutoCollector:
                             count += 1
                             if count >= self.max_per_source:
                                 break
-                    emit_log(f"  [URLSCAN] '{query}' → {count} domain(s)", "success")
+                    emit_log(f"  [URLSCAN] '{query}' â†’ {count} domain(s)", "success")
                 else:
-                    emit_log(f"  [URLSCAN] '{query}' → HTTP {resp.status_code}", "warn")
+                    emit_log(f"  [URLSCAN] '{query}' â†’ HTTP {resp.status_code}", "warn")
 
                 await asyncio.sleep(2)
 
@@ -184,7 +184,7 @@ class AutoCollector:
                 emit_log(f"  [URLSCAN] error: {str(e)[:80]}", "warn")
 
         added = len(self.results) - before
-        emit_log(f"[URLSCAN] Complete — {added} unique domain(s) added", "success")
+        emit_log(f"[URLSCAN] Complete â€” {added} unique domain(s) added", "success")
 
     async def collect_from_commoncrawl(self, search_domain: Optional[str] = None, limit: int = 500):
         emit_log(f"[COMMONCRAWL] Fetching index (limit={limit})...", "info")
@@ -230,11 +230,11 @@ class AutoCollector:
             emit_log(f"[COMMONCRAWL] error: {str(e)[:100]}", "warn")
 
         added = len(self.results) - before
-        emit_log(f"[COMMONCRAWL] Complete — {added} unique domain(s) added", "success")
+        emit_log(f"[COMMONCRAWL] Complete â€” {added} unique domain(s) added", "success")
 
     async def collect_from_shodan(self, queries: List[str], api_key: Optional[str] = None):
         if not api_key:
-            emit_log("[SHODAN] No API key provided — skipping", "warn")
+            emit_log("[SHODAN] No API key provided â€” skipping", "warn")
             return
 
         emit_log(f"[SHODAN] Querying {len(queries)} search(es)...", "info")
@@ -254,12 +254,12 @@ class AutoCollector:
                         for hostname in match.get("hostnames", []):
                             if hostname and self._add_domain(hostname, "shodan"):
                                 count += 1
-                    emit_log(f"  [SHODAN] '{query}' → {count} host(s)", "success")
+                    emit_log(f"  [SHODAN] '{query}' â†’ {count} host(s)", "success")
                 elif resp.status_code == 401:
                     emit_log("[SHODAN] Invalid API key", "error")
                     return
                 else:
-                    emit_log(f"  [SHODAN] '{query}' → HTTP {resp.status_code}", "warn")
+                    emit_log(f"  [SHODAN] '{query}' â†’ HTTP {resp.status_code}", "warn")
 
                 await asyncio.sleep(1)
 
@@ -267,7 +267,7 @@ class AutoCollector:
                 emit_log(f"  [SHODAN] error: {str(e)[:80]}", "warn")
 
         added = len(self.results) - before
-        emit_log(f"[SHODAN] Complete — {added} unique domain(s) added", "success")
+        emit_log(f"[SHODAN] Complete â€” {added} unique domain(s) added", "success")
 
     async def collect_from_public_lists(self, limit: int = 1000):
         emit_log(f"[PUBLIC LISTS] Downloading top domain lists (limit={limit})...", "info")
@@ -301,7 +301,7 @@ class AutoCollector:
                 emit_log(f"  [{name.upper()}] error: {str(e)[:80]}", "warn")
 
         added = len(self.results) - before
-        emit_log(f"[PUBLIC LISTS] Complete — {added} unique domain(s) added", "success")
+        emit_log(f"[PUBLIC LISTS] Complete â€” {added} unique domain(s) added", "success")
 
     async def collect_from_google_dorking(self, dorks: List[str]):
         emit_log(f"[GOOGLE DORKS] Processing {len(dorks)} dork(s) via passive extraction...", "info")
@@ -324,9 +324,9 @@ class AutoCollector:
                         if self._add_domain(host, "google_dork"):
                             count += 1
                     if count > 0:
-                        emit_log(f"  [DORK] '{dork[:40]}...' → {count} domain(s)", "success")
+                        emit_log(f"  [DORK] '{dork[:40]}...' â†’ {count} domain(s)", "success")
                 elif resp.status_code == 429:
-                    emit_log("[GOOGLE DORKS] Rate limited by Google — stopping dorks", "warn")
+                    emit_log("[GOOGLE DORKS] Rate limited by Google â€” stopping dorks", "warn")
                     break
                 else:
                     emit_log(f"  [DORK] HTTP {resp.status_code}", "warn")
@@ -337,10 +337,10 @@ class AutoCollector:
                 emit_log(f"  [DORK] error: {str(e)[:80]}", "warn")
 
         added = len(self.results) - before
-        emit_log(f"[GOOGLE DORKS] Complete — {added} unique domain(s) added", "success")
+        emit_log(f"[GOOGLE DORKS] Complete â€” {added} unique domain(s) added", "success")
 
     async def run(self, config: Dict[str, Any]):
-        emit_log("AUTO COLLECTOR — Starting automatic target collection", "info")
+        emit_log("AUTO COLLECTOR â€” Starting automatic target collection", "info")
         emit("collector_phase", {"phase": "collecting", "status": "running"})
         start_time = time.time()
 
@@ -392,7 +392,7 @@ class AutoCollector:
         })
 
         emit_log(
-            f"AUTO COLLECTOR complete — {len(sorted_domains)} unique domain(s) from {len(self.source_stats)} source(s) in {elapsed:.1f}s",
+            f"AUTO COLLECTOR complete â€” {len(sorted_domains)} unique domain(s) from {len(self.source_stats)} source(s) in {elapsed:.1f}s",
             "success",
         )
 
@@ -419,3 +419,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
