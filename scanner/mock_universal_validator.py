@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import Any, Dict, List
 
 
@@ -35,7 +35,7 @@ class UniversalMockValidator:
                 issues.append({
                     "type": "subdomain_pattern",
                     "severity": "critical",
-                    "message": f"17 subdomínios genéricos detectados: {sub_names}",
+                    "message": f"17 subdomÃ­nios genÃ©ricos detectados: {sub_names}",
                     "action": "REJECT",
                 })
                 self.suspicious_patterns["subdomains_17"] += 1
@@ -51,7 +51,7 @@ class UniversalMockValidator:
                     issues.append({
                         "type": "ssrf_redis_false_positive",
                         "severity": "high",
-                        "message": "SSRF Redis reportado mas NÃO confirmado",
+                        "message": "SSRF Redis reportado mas NÃƒO confirmado",
                         "action": "REJECT",
                     })
                     self.suspicious_patterns["ssrf_redis"] += 1
@@ -69,7 +69,7 @@ class UniversalMockValidator:
                 issues.append({
                     "type": "bulk_dumps",
                     "severity": "critical",
-                    "message": f"{count} dumps gerados no mesmo segundo ({ts}) - IMPOSSÍVEL",
+                    "message": f"{count} dumps gerados no mesmo segundo ({ts}) - IMPOSSÃVEL",
                     "action": "REJECT",
                 })
                 self.suspicious_patterns["bulk_dumps"] += 1
@@ -82,7 +82,7 @@ class UniversalMockValidator:
                 issues.append({
                     "type": "perfect_number",
                     "severity": "medium",
-                    "message": f"Métrica '{key}' tem valor perfeito: {value}",
+                    "message": f"MÃ©trica '{key}' tem valor perfeito: {value}",
                     "action": "WARN",
                 })
 
@@ -91,16 +91,16 @@ class UniversalMockValidator:
             issues.append({
                 "type": "zero_credentials",
                 "severity": "high",
-                "message": f"ZERO credenciais em {len(dumps)} dumps - estatisticamente improvável",
+                "message": f"ZERO credenciais em {len(dumps)} dumps - estatisticamente improvÃ¡vel",
                 "action": "REJECT",
             })
 
         critical = [i for i in issues if i.get("action") == "REJECT" and i.get("severity") in ("critical", "high")]
         if critical:
             if self.logger:
-                self.logger.error(f"❌ SCAN {scan_id} REJEITADO - {len(critical)} problemas críticos")
+                self.logger.error(f"âŒ SCAN {scan_id} REJEITADO - {len(critical)} problemas crÃ­ticos")
                 for issue in critical:
-                    self.logger.error(f"   → {issue['message']}")
+                    self.logger.error(f"   â†’ {issue['message']}")
             self._mark_as_rejected(scan_id, critical)
             return False
 
@@ -113,3 +113,4 @@ class UniversalMockValidator:
         # TODO: implement storage integration to persist rejection reason
         _ = (scan_id, issues, datetime.utcnow())
         return None
+
