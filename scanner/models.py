@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -111,3 +111,4 @@ class AssessmentJob:
                 for a in self.audit_log
             ],
         }
+
