@@ -1,17 +1,17 @@
-"""
-MSE Motor 11 — Autonomous Consolidator Engine
+﻿"""
+MSE Motor 11  Autonomous Consolidator Engine
 ===================================================
-NÃO SUBSTITUI NADA. Consome dados brutos de TODOS os motores (1-10),
-consolida findings/probes/dumps, aplica dicionário brutal com decisão
-Bayesiana + mutação genética para execução autônoma de ataques.
+NÃƒO SUBSTITUI NADA. Consome dados brutos de TODOS os motores (1-10),
+consolida findings/probes/dumps, aplica dicionÃ¡rio brutal com decisÃ£o
+Bayesiana + mutaÃ§Ã£o genÃ©tica para execuÃ§Ã£o autÃ´noma de ataques.
 
 Fases:
-  1. INGEST    — Coleta resultados brutos de todos os motores
-  2. CORRELATE — Cruza dados, identifica vetores de alto valor
-  3. SELECT    — Seleciona payloads via Bayesian + contexto
-  4. EXECUTE   — Execução autônoma (Selenium para XSS, httpx para REST)
-  5. EVOLVE    — Mutação genética dos payloads que quase funcionaram
-  6. REPORT    — Emite relatório consolidado em tempo real
+  1. INGEST     Coleta resultados brutos de todos os motores
+  2. CORRELATE  Cruza dados, identifica vetores de alto valor
+  3. SELECT     Seleciona payloads via Bayesian + contexto
+  4. EXECUTE    ExecuÃ§Ã£o autÃ´noma (Selenium para XSS, httpx para REST)
+  5. EVOLVE     MutaÃ§Ã£o genÃ©tica dos payloads que quase funcionaram
+  6. REPORT     Emite relatÃ³rio consolidado em tempo real
 
 Emite eventos via stdout JSON para consumo pelo server/admin.ts
 """
@@ -195,7 +195,7 @@ class MLPayloadSelector:
 
 
 class MonteCarloSimulator:
-    """Simula cenÃ¡rios para estimar probabilidade real de sucesso."""
+    """Simula cenÃƒÂ¡rios para estimar probabilidade real de sucesso."""
 
     def __init__(self, simulations: int = 300):
         self.simulations = simulations
@@ -278,7 +278,7 @@ class MonteCarloSimulator:
 
 
 class FuzzyDecisionEngine:
-    """Tomada de decisÃ£o baseada em lÃ³gica fuzzy para risco/recompensa."""
+    """Tomada de decisÃƒÂ£o baseada em lÃƒÂ³gica fuzzy para risco/recompensa."""
 
     def __init__(self):
         self.prob_sets = {
@@ -433,17 +433,17 @@ class AutonomousConsolidator:
                              enterprise_dossier: Dict = None,
                              persistence_assessment: Dict = None):
 
-        self.log("[MOTOR 11] ★ PHASE 1: INGEST — Consumindo dados brutos de TODOS os motores...", "error", "ingest")
+        self.log("[MOTOR 11] â˜… PHASE 1: INGEST  Consumindo dados brutos de TODOS os motores...", "error", "ingest")
 
         if findings:
             self.consolidated_intel["all_findings"] = list(findings)
             self._classify_findings(findings)
-            self.log(f"  ├─ {len(findings)} findings ingeridos", "info", "ingest")
+            self.log(f"  â”œâ”€ {len(findings)} findings ingeridos", "info", "ingest")
 
         if probes:
             self.consolidated_intel["all_probes"] = list(probes)
             self._extract_probe_intel(probes)
-            self.log(f"  ├─ {len(probes)} probes ingeridos", "info", "ingest")
+            self.log(f"  â”œâ”€ {len(probes)} probes ingeridos", "info", "ingest")
 
         if hypothesis:
             stacks = hypothesis.get("detected_stacks", [])
@@ -460,24 +460,24 @@ class AutonomousConsolidator:
             subdomains = ghost_recon.get("subdomains", [])
             self.consolidated_intel["endpoints"].extend(endpoints)
             if subdomains:
-                self.log(f"  ├─ Ghost Recon: {len(subdomains)} subdomains, {len(endpoints)} forgotten paths", "warn", "ingest")
+                self.log(f"  â”œâ”€ Ghost Recon: {len(subdomains)} subdomains, {len(endpoints)} forgotten paths", "warn", "ingest")
 
         if decision_intel:
             tree_report = decision_intel.get("tree_report", {})
             vuln_classes = tree_report.get("vulnerability_classes_detected", [])
             if vuln_classes:
-                self.log(f"  ├─ Decision Intel: {len(vuln_classes)} vuln classes detectadas", "warn", "ingest")
+                self.log(f"  â”œâ”€ Decision Intel: {len(vuln_classes)} vuln classes detectadas", "warn", "ingest")
 
         if adversarial_report:
             state_transitions = adversarial_report.get("state_transitions", [])
             if state_transitions:
-                self.log(f"  ├─ Adversarial: {len(state_transitions)} state transitions", "info", "ingest")
+                self.log(f"  â”œâ”€ Adversarial: {len(state_transitions)} state transitions", "info", "ingest")
 
         if chain_intel:
             self.consolidated_intel["chain_intel"] = chain_intel
             chains = chain_intel.get("chains_discovered", [])
             if chains:
-                self.log(f"  ├─ Chain Intel: {len(chains)} exploitation chains", "warn", "ingest")
+                self.log(f"  â”œâ”€ Chain Intel: {len(chains)} exploitation chains", "warn", "ingest")
 
         if hacker_reasoning:
             env = hacker_reasoning.get("environment", {})
@@ -496,13 +496,13 @@ class AutonomousConsolidator:
             playbooks = hacker_reasoning.get("executed_playbooks", [])
             self.consolidated_intel["hrd_playbooks"] = playbooks
             if playbooks:
-                self.log(f"  ├─ HRD: {len(playbooks)} playbooks executados", "info", "ingest")
+                self.log(f"  â”œâ”€ HRD: {len(playbooks)} playbooks executados", "info", "ingest")
 
         if incident_evidence:
             self.consolidated_intel["incident_evidence"] = incident_evidence
             ev_count = len(incident_evidence.get("evidence_table", []))
             if ev_count:
-                self.log(f"  ├─ Incident Absorber: {ev_count} evidências", "error", "ingest")
+                self.log(f"  â”œâ”€ Incident Absorber: {ev_count} evidÃªncias", "error", "ingest")
 
         self.consolidated_intel["risk_score"] = risk_score
         self.consolidated_intel["auto_dump_triggered"] = auto_dump_triggered
@@ -523,7 +523,7 @@ class AutonomousConsolidator:
             self.consolidated_intel["credentials"].extend(creds)
             self.consolidated_intel["session_tokens"].extend(tokens)
             if creds or tokens:
-                self.log(f"  ├─ Dossier: {len(creds)} credentials, {len(tokens)} session tokens", "error", "ingest")
+                self.log(f"  â”œâ”€ Dossier: {len(creds)} credentials, {len(tokens)} session tokens", "error", "ingest")
 
         self.emit("motor11_ingest_complete", {
             "findings": len(self.consolidated_intel["all_findings"]),
@@ -538,7 +538,7 @@ class AutonomousConsolidator:
             "auto_dump": auto_dump_triggered,
         })
 
-        self.log(f"  └─ INGEST COMPLETO — Risk Score: {risk_score:.2f}, Tech: {self.consolidated_intel['tech_stack']}", "error", "ingest")
+        self.log(f"  â””â”€ INGEST COMPLETO  Risk Score: {risk_score:.2f}, Tech: {self.consolidated_intel['tech_stack']}", "error", "ingest")
 
     def _classify_findings(self, findings: List):
         for f in findings:
@@ -585,7 +585,7 @@ class AutonomousConsolidator:
                     self.consolidated_intel["cookies"].append(cookies_header)
 
     async def correlate(self) -> Dict:
-        self.log("[MOTOR 11] ★ PHASE 2: CORRELATE — Cruzando dados de todos os motores...", "error", "correlate")
+        self.log("[MOTOR 11] â˜… PHASE 2: CORRELATE  Cruzando dados de todos os motores...", "error", "correlate")
 
         intel = self.consolidated_intel
         context = {
@@ -629,19 +629,19 @@ class AutonomousConsolidator:
         if intel["confirmed_xss"]:
             for v in bayesian_xss:
                 self.bayesian.update_prior(v, True)
-            self.log(f"  ├─ {len(intel['confirmed_xss'])} XSS confirmados → priors BOOSTED", "warn", "correlate")
+            self.log(f"  â”œâ”€ {len(intel['confirmed_xss'])} XSS confirmados â†’ priors BOOSTED", "warn", "correlate")
 
         if intel["js_sinks"]:
             self.bayesian.update_prior("xss_dom", True)
             self.bayesian.update_prior("xss_dom", True)
-            self.log(f"  ├─ {len(intel['js_sinks'])} DOM sinks → xss_dom prior BOOSTED x2", "warn", "correlate")
+            self.log(f"  â”œâ”€ {len(intel['js_sinks'])} DOM sinks â†’ xss_dom prior BOOSTED x2", "warn", "correlate")
 
         if intel["confirmed_sqli"]:
             for sq_v in ["sqli_raw", "sqli_blind", "sqli_union", "sqli_error"]:
                 if sq_v not in self.bayesian.priors:
                     self.bayesian.priors[sq_v] = 0.45
                 self.bayesian.update_prior(sq_v, True)
-            self.log(f"  ├─ {len(intel['confirmed_sqli'])} SQLi confirmados → priors BOOSTED", "warn", "correlate")
+            self.log(f"  â”œâ”€ {len(intel['confirmed_sqli'])} SQLi confirmados â†’ priors BOOSTED", "warn", "correlate")
 
         if intel["confirmed_ssrf"]:
             self.bayesian.update_prior("ssrf", True)
@@ -669,11 +669,11 @@ class AutonomousConsolidator:
         except Exception:
             pass
 
-        self.log(f"  ├─ Bayesian: {len(attack_targets)} ATTACK, {len(defer_targets)} DEFER, {len(skip_targets)} SKIP", "error", "correlate")
+        self.log(f"  â”œâ”€ Bayesian: {len(attack_targets)} ATTACK, {len(defer_targets)} DEFER, {len(skip_targets)} SKIP", "error", "correlate")
 
         for at in attack_targets:
             self._add_reasoning(
-                f"ATTACK: {at['attack_vector']} — P(success)={at['probability']:.3f} "
+                f"ATTACK: {at['attack_vector']}  P(success)={at['probability']:.3f} "
                 f"[prior={at['prior']:.3f}, likelihood={at['likelihood']:.3f}]",
                 "attack_decision"
             )
@@ -693,8 +693,8 @@ class AutonomousConsolidator:
             limit=40,
         )
 
-        self.log(f"  ├─ Dictionary: {len(selected_payloads)} payloads selecionados (de {self.dictionary.get_total_count()} total)", "warn", "correlate")
-        self.log(f"  └─ CORRELATE COMPLETO", "error", "correlate")
+        self.log(f"  â”œâ”€ Dictionary: {len(selected_payloads)} payloads selecionados (de {self.dictionary.get_total_count()} total)", "warn", "correlate")
+        self.log(f"  â””â”€ CORRELATE COMPLETO", "error", "correlate")
 
         correlation_report = {
             "bayesian_results": bayesian_results,
@@ -715,7 +715,7 @@ class AutonomousConsolidator:
         }
 
     async def execute_autonomous(self, correlation: Dict) -> List[Dict]:
-        self.log("[MOTOR 11] ★ PHASE 3: EXECUTE — Execução autônoma guiada por probabilidade...", "error", "execute")
+        self.log("[MOTOR 11] â˜… PHASE 3: EXECUTE  ExecuÃ§Ã£o autÃ´noma guiada por probabilidade...", "error", "execute")
 
         attack_targets = correlation.get("attack_targets", [])
         m11_emit("autonomous_thought", {
@@ -726,12 +726,12 @@ class AutonomousConsolidator:
         selected_payloads = correlation.get("selected_payloads", [])
 
         if not selected_payloads:
-            self.log("  └─ Nenhum payload selecionado. Abortando execução.", "warn", "execute")
+            self.log("  â””â”€ Nenhum payload selecionado. Abortando execuÃ§Ã£o.", "warn", "execute")
             return []
 
         timing = self._calculate_timing()
         self.log(
-            f"  ├─ Timing profile: {timing['delay']}s delay, {timing['max_rpm']} req/min, jitter={'ON' if timing['jitter'] else 'OFF'}",
+            f"  â”œâ”€ Timing profile: {timing['delay']}s delay, {timing['max_rpm']} req/min, jitter={'ON' if timing['jitter'] else 'OFF'}",
             "info", "execute"
         )
 
@@ -742,7 +742,7 @@ class AutonomousConsolidator:
         results = []
 
         if xss_payloads:
-            self.log(f"  ├─ XSS PHASE: {len(xss_payloads)} payloads para teste browser-based...", "error", "execute")
+            self.log(f"  â”œâ”€ XSS PHASE: {len(xss_payloads)} payloads para teste browser-based...", "error", "execute")
             xss_results = await self._execute_xss_payloads(xss_payloads[:20], timing)
             results.extend(xss_results)
 
@@ -751,7 +751,7 @@ class AutonomousConsolidator:
             blocked = [r for r in xss_results if r.get("blocked")]
 
             self.log(
-                f"  │  └─ XSS: {len(success)} confirmed, {len(partial)} reflected, {len(blocked)} blocked",
+                f"  â”‚  â””â”€ XSS: {len(success)} confirmed, {len(partial)} reflected, {len(blocked)} blocked",
                 "error" if success else "warn", "execute"
             )
 
@@ -763,36 +763,36 @@ class AutonomousConsolidator:
                 self.dictionary.update_weight(f.get("payload_id", ""), False)
 
             if partial and self.cycles_completed < self.max_cycles:
-                self.log(f"  │  ├─ {len(partial)} payloads reflected → feeding Genetic Engine for mutation...", "warn", "execute")
+                self.log(f"  â”‚  â”œâ”€ {len(partial)} payloads reflected â†’ feeding Genetic Engine for mutation...", "warn", "execute")
                 mutated = self._evolve_partial_payloads(partial)
                 if mutated:
-                    self.log(f"  │  └─ {len(mutated)} mutants generated for cycle {self.cycles_completed + 1}", "warn", "execute")
+                    self.log(f"  â”‚  â””â”€ {len(mutated)} mutants generated for cycle {self.cycles_completed + 1}", "warn", "execute")
                     mutated_results = await self._execute_xss_payloads(mutated[:10], timing)
                     results.extend(mutated_results)
                     mut_success = [r for r in mutated_results if r.get("success")]
                     if mut_success:
-                        self.log(f"  │     └─ GENETIC MUTATION SUCCESS: {len(mut_success)} XSS confirmed via evolved payloads!", "error", "execute")
+                        self.log(f"  â”‚     â””â”€ GENETIC MUTATION SUCCESS: {len(mut_success)} XSS confirmed via evolved payloads!", "error", "execute")
 
         if injection_payloads:
-            self.log(f"  ├─ INJECTION PHASE: {len(injection_payloads)} payloads para teste HTTP...", "warn", "execute")
+            self.log(f"  â”œâ”€ INJECTION PHASE: {len(injection_payloads)} payloads para teste HTTP...", "warn", "execute")
             inj_results = await self._execute_http_payloads(injection_payloads[:15], timing)
             results.extend(inj_results)
 
             inj_success = [r for r in inj_results if r.get("success")]
             if inj_success:
-                self.log(f"  │  └─ INJECTION: {len(inj_success)} confirmed!", "error", "execute")
+                self.log(f"  â”‚  â””â”€ INJECTION: {len(inj_success)} confirmed!", "error", "execute")
                 for s in inj_success:
                     self.bayesian.update_prior(s.get("vector", "sqli"), True)
                     self.dictionary.update_weight(s.get("payload_id", ""), True)
 
         if infra_payloads:
-            self.log(f"  ├─ INFRA PHASE: {len(infra_payloads)} payloads para teste infra...", "warn", "execute")
+            self.log(f"  â”œâ”€ INFRA PHASE: {len(infra_payloads)} payloads para teste infra...", "warn", "execute")
             infra_results = await self._execute_http_payloads(infra_payloads[:10], timing)
             results.extend(infra_results)
 
             infra_success = [r for r in infra_results if r.get("success")]
             if infra_success:
-                self.log(f"  │  └─ INFRA: {len(infra_success)} confirmed!", "error", "execute")
+                self.log(f"  â”‚  â””â”€ INFRA: {len(infra_success)} confirmed!", "error", "execute")
 
         self.execution_results = results
         self.cycles_completed += 1
@@ -805,16 +805,16 @@ class AutonomousConsolidator:
             "cycle": self.cycles_completed,
         })
 
-        self.log(f"  └─ EXECUTE COMPLETO — Ciclo {self.cycles_completed}/{self.max_cycles}", "error", "execute")
+        self.log(f"  â””â”€ EXECUTE COMPLETO  Ciclo {self.cycles_completed}/{self.max_cycles}", "error", "execute")
         return results
 
     async def execute_autonomous_v2(self, correlation: Dict) -> List[Dict]:
-        """Versão SNIPER com seleção adaptativa, Monte Carlo e lógica fuzzy."""
-        self.log("[MOTOR 11-SNIPER] ★ PHASE 3: EXECUTE — ML + Monte Carlo + Fuzzy", "error", "execute")
+        """VersÃ£o SNIPER com seleÃ§Ã£o adaptativa, Monte Carlo e lÃ³gica fuzzy."""
+        self.log("[MOTOR 11-SNIPER] â˜… PHASE 3: EXECUTE  ML + Monte Carlo + Fuzzy", "error", "execute")
 
         selected_payloads = correlation.get("selected_payloads", [])
         if not selected_payloads:
-            self.log("  └─ Nenhum payload selecionado. Abortando execução.", "warn", "execute")
+            self.log("  â””â”€ Nenhum payload selecionado. Abortando execuÃ§Ã£o.", "warn", "execute")
             return []
 
         context = {
@@ -834,7 +834,7 @@ class AutonomousConsolidator:
 
         timing = self._calculate_timing()
         self.log(
-            f"  ├─ Timing: {timing['delay']}s, {timing['max_rpm']} rpm, jitter={'ON' if timing['jitter'] else 'OFF'} | ML payloads={len(top_payloads)}",
+            f"  â”œâ”€ Timing: {timing['delay']}s, {timing['max_rpm']} rpm, jitter={'ON' if timing['jitter'] else 'OFF'} | ML payloads={len(top_payloads)}",
             "info", "execute"
         )
 
@@ -846,7 +846,7 @@ class AutonomousConsolidator:
         results: List[Dict] = []
 
         if lfi_payloads:
-            self.log(f"  ├─ LFI SNIPER: {len(lfi_payloads)} payloads (avançado)...", "error", "execute")
+            self.log(f"  â”œâ”€ LFI SNIPER: {len(lfi_payloads)} payloads (avanÃ§ado)...", "error", "execute")
             lfi_results = await self._execute_lfi_advanced(lfi_payloads[:15], timing)
             results.extend(lfi_results)
             self.ml_selector.update_from_execution(lfi_results, context)
@@ -857,10 +857,10 @@ class AutonomousConsolidator:
                     fuzzy = fuzzy_engine.decide(prob=mc["success_probability"], data_value=r.get("value", 0), detection_risk=context["detection_rate"])
                     r["monte_carlo"] = mc
                     r["fuzzy_decision"] = fuzzy
-                    self.log(f"  │  └─ LFI {r.get('target_path','')} → {fuzzy['decision']} (p={mc['success_probability']:.2f}, val={r.get('value',0):.0f})", "error", "execute")
+                    self.log(f"  â”‚  â””â”€ LFI {r.get('target_path','')} â†’ {fuzzy['decision']} (p={mc['success_probability']:.2f}, val={r.get('value',0):.0f})", "error", "execute")
 
         if xss_payloads:
-            self.log(f"  ├─ XSS PHASE: {len(xss_payloads)} payloads para teste browser-based...", "error", "execute")
+            self.log(f"  â”œâ”€ XSS PHASE: {len(xss_payloads)} payloads para teste browser-based...", "error", "execute")
             xss_results = await self._execute_xss_payloads(xss_payloads[:20], timing)
             results.extend(xss_results)
 
@@ -869,7 +869,7 @@ class AutonomousConsolidator:
             blocked = [r for r in xss_results if r.get("blocked")]
 
             self.log(
-                f"  │  └─ XSS: {len(success)} confirmed, {len(partial)} reflected, {len(blocked)} blocked",
+                f"  â”‚  â””â”€ XSS: {len(success)} confirmed, {len(partial)} reflected, {len(blocked)} blocked",
                 "error" if success else "warn", "execute"
             )
 
@@ -881,43 +881,43 @@ class AutonomousConsolidator:
                 self.dictionary.update_weight(f.get("payload_id", ""), False)
 
             if partial and self.cycles_completed < self.max_cycles:
-                self.log(f"  │  ├─ {len(partial)} payloads reflected → feeding Genetic Engine for mutation...", "warn", "execute")
+                self.log(f"  â”‚  â”œâ”€ {len(partial)} payloads reflected â†’ feeding Genetic Engine for mutation...", "warn", "execute")
                 mutated = self._evolve_partial_payloads(partial)
                 if mutated:
-                    self.log(f"  │  └─ {len(mutated)} mutants generated for cycle {self.cycles_completed + 1}", "warn", "execute")
+                    self.log(f"  â”‚  â””â”€ {len(mutated)} mutants generated for cycle {self.cycles_completed + 1}", "warn", "execute")
                     mutated_results = await self._execute_xss_payloads(mutated[:10], timing)
                     results.extend(mutated_results)
                     mut_success = [r for r in mutated_results if r.get("success")]
                     if mut_success:
-                        self.log(f"  │     └─ GENETIC MUTATION SUCCESS: {len(mut_success)} XSS confirmed via evolved payloads!", "error", "execute")
+                        self.log(f"  â”‚     â””â”€ GENETIC MUTATION SUCCESS: {len(mut_success)} XSS confirmed via evolved payloads!", "error", "execute")
 
         if injection_payloads:
-            self.log(f"  ├─ INJECTION PHASE: {len(injection_payloads)} payloads para teste HTTP...", "warn", "execute")
+            self.log(f"  â”œâ”€ INJECTION PHASE: {len(injection_payloads)} payloads para teste HTTP...", "warn", "execute")
             inj_results = await self._execute_http_payloads(injection_payloads[:15], timing)
             results.extend(inj_results)
 
             inj_success = [r for r in inj_results if r.get("success")]
             if inj_success:
-                self.log(f"  │  └─ INJECTION: {len(inj_success)} confirmed!", "error", "execute")
+                self.log(f"  â”‚  â””â”€ INJECTION: {len(inj_success)} confirmed!", "error", "execute")
                 for s in inj_success:
                     self.bayesian.update_prior(s.get("vector", "sqli"), True)
                     self.dictionary.update_weight(s.get("payload_id", ""), True)
 
         if infra_payloads:
-            self.log(f"  ├─ INFRA PHASE: {len(infra_payloads)} payloads para teste infra...", "warn", "execute")
+            self.log(f"  â”œâ”€ INFRA PHASE: {len(infra_payloads)} payloads para teste infra...", "warn", "execute")
             infra_results = await self._execute_http_payloads(infra_payloads[:10], timing)
             results.extend(infra_results)
 
             infra_success = [r for r in infra_results if r.get("success")]
             if infra_success:
-                self.log(f"  │  └─ INFRA: {len(infra_success)} confirmed!", "error", "execute")
+                self.log(f"  â”‚  â””â”€ INFRA: {len(infra_success)} confirmed!", "error", "execute")
 
         self.execution_results = results
         self.cycles_completed += 1
 
         ml_stats = self.ml_selector.get_stats()
         self.log(
-            f"  ├─ ML Stats: {ml_stats['total_experience']} trials, accuracy {ml_stats['accuracy']:.1%}, contexts {ml_stats['unique_contexts']}",
+            f"  â”œâ”€ ML Stats: {ml_stats['total_experience']} trials, accuracy {ml_stats['accuracy']:.1%}, contexts {ml_stats['unique_contexts']}",
             "info", "execute"
         )
 
@@ -929,7 +929,7 @@ class AutonomousConsolidator:
             "cycle": self.cycles_completed,
         })
 
-        self.log(f"  └─ EXECUTE COMPLETO — Ciclo {self.cycles_completed}/{self.max_cycles}", "error", "execute")
+        self.log(f"  â””â”€ EXECUTE COMPLETO  Ciclo {self.cycles_completed}/{self.max_cycles}", "error", "execute")
         return results
 
     async def _execute_xss_payloads(self, payloads: List[Dict], timing: Dict) -> List[Dict]:
@@ -940,7 +940,7 @@ class AutonomousConsolidator:
             from scanner.modules.browser_recon import create_driver
             driver = create_driver()
         except Exception as e:
-            self.log(f"  │  [!] Selenium unavailable: {e} — falling back to HTTP", "warn", "execute")
+            self.log(f"  â”‚  [!] Selenium unavailable: {e}  falling back to HTTP", "warn", "execute")
             return await self._execute_http_payloads(payloads, timing)
 
         try:
@@ -1018,7 +1018,7 @@ class AutonomousConsolidator:
 
                 except Exception as e:
                     result["evidence"] = f"Error: {str(e)[:200]}"
-                    self.log(f"  │  [!] Test error {p['id']}: {str(e)[:100]}", "warn", "execute")
+                    self.log(f"  â”‚  [!] Test error {p['id']}: {str(e)[:100]}", "warn", "execute")
 
                 results.append(result)
 
@@ -1140,7 +1140,7 @@ class AutonomousConsolidator:
                             except httpx.TimeoutException:
                                 if p.get("detection") == "time_based":
                                     result["success"] = True
-                                    result["evidence"] = "Timeout — possible time-based injection"
+                                    result["evidence"] = "Timeout  possible time-based injection"
                             except Exception as he:
                                 result["evidence"] = f"HTTP error: {str(he)[:100]}"
 
@@ -1317,11 +1317,11 @@ class AutonomousConsolidator:
                                   enterprise_dossier: Dict = None,
                                   persistence_assessment: Dict = None) -> Dict:
 
-        self.log("╔══════════════════════════════════════════════════════════════╗", "error", "motor11")
-        self.log("║  MOTOR 11 — AUTONOMOUS CONSOLIDATOR ENGINE ACTIVATED       ║", "error", "motor11")
-        self.log(f"║  Target: {self.target[:50]:<50}  ║", "error", "motor11")
-        self.log(f"║  Dictionary: {self.dictionary.get_total_count()} payloads | Max Cycles: {self.max_cycles}             ║", "error", "motor11")
-        self.log("╚══════════════════════════════════════════════════════════════╝", "error", "motor11")
+        self.log("â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—", "error", "motor11")
+        self.log("â•‘  MOTOR 11  AUTONOMOUS CONSOLIDATOR ENGINE ACTIVATED       â•‘", "error", "motor11")
+        self.log(f"â•‘  Target: {self.target[:50]:<50}  â•‘", "error", "motor11")
+        self.log(f"â•‘  Dictionary: {self.dictionary.get_total_count()} payloads | Max Cycles: {self.max_cycles}             â•‘", "error", "motor11")
+        self.log("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•", "error", "motor11")
 
         self.ingest_pipeline_data(
             findings=findings,
@@ -1346,11 +1346,11 @@ class AutonomousConsolidator:
 
         report = self.generate_report()
 
-        self.log("╔══════════════════════════════════════════════════════════════╗", "error", "motor11")
-        self.log(f"║  MOTOR 11 COMPLETE — {report['execution_summary']['confirmed_vulns']} CONFIRMED VULNS                      ║", "error", "motor11")
-        self.log(f"║  Tests: {report['execution_summary']['total_tests']} | Success Rate: {report['execution_summary']['success_rate']:.1%}                      ║", "error", "motor11")
-        self.log(f"║  Duration: {report['duration_seconds']}s | Cycles: {report['cycles_completed']}                           ║", "error", "motor11")
-        self.log("╚══════════════════════════════════════════════════════════════╝", "error", "motor11")
+        self.log("â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—", "error", "motor11")
+        self.log(f"â•‘  MOTOR 11 COMPLETE  {report['execution_summary']['confirmed_vulns']} CONFIRMED VULNS                      â•‘", "error", "motor11")
+        self.log(f"â•‘  Tests: {report['execution_summary']['total_tests']} | Success Rate: {report['execution_summary']['success_rate']:.1%}                      â•‘", "error", "motor11")
+        self.log(f"â•‘  Duration: {report['duration_seconds']}s | Cycles: {report['cycles_completed']}                           â•‘", "error", "motor11")
+        self.log("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•", "error", "motor11")
 
         self.emit("motor11_report", report)
         return report
@@ -1532,3 +1532,4 @@ if __name__ == "__main__":
 
     target = sys.argv[1]
     asyncio.run(run_standalone(target))
+
