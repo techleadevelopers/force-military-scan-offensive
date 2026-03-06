@@ -1,9 +1,9 @@
-"""
+﻿"""
 MSE Predictive Decision Engine
 ================================
 Predicts where vulnerabilities MUST exist based on patterns,
 stack fingerprints, OSINT intelligence, and historical data.
-Does not wait to find — it PREDICTS before scanning.
+Does not wait to find â€” it PREDICTS before scanning.
 """
 
 import re
@@ -204,3 +204,4 @@ class PredictiveDecisionEngine:
             "jwt_none_algorithm": ["token_forge", "auth_bypass", "privilege_escalation"],
         }
         return chains.get(vuln)
+
