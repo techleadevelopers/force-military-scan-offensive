@@ -1,5 +1,5 @@
-"""
-MSE Ghost Recon Engine v1.0 — Zero-Footprint Passive OSINT
+﻿"""
+MSE Ghost Recon Engine v1.0  Zero-Footprint Passive OSINT
 ============================================================
 Reconnaissance layer that maps the attack surface WITHOUT
 sending a single request to the target. All data comes from
@@ -105,7 +105,7 @@ class GhostReconEngine:
 
     async def execute(self) -> Dict:
         self.log(
-            f"[GHOST] ZERO-FOOTPRINT RECON INITIATED — Target domain: {self.domain}",
+            f"[GHOST] ZERO-FOOTPRINT RECON INITIATED  Target domain: {self.domain}",
             "warn", "ghost_recon"
         )
         self.log(
@@ -132,7 +132,7 @@ class GhostReconEngine:
         self._calculate_confidence()
 
         self.log(
-            f"[GHOST] RECON COMPLETE — {len(self.intel.subdomains)} subdomains, "
+            f"[GHOST] RECON COMPLETE  {len(self.intel.subdomains)} subdomains, "
             f"{len(self.intel.archived_endpoints)} archived endpoints, "
             f"{len(self.intel.forgotten_paths)} forgotten paths, "
             f"confidence: {self.intel.confidence_score:.1%}",
@@ -264,3 +264,4 @@ class GhostReconEngine:
 async def run_ghost_recon(target: str) -> Dict:
     engine = GhostReconEngine(target)
     return await engine.execute()
+
