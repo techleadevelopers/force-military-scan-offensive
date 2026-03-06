@@ -1,8 +1,8 @@
-"""
+﻿"""
 MSE Deep Fingerprinter with CVE Mapping
 ==========================================
 Identifies EXACT versions of components and maps them to known CVEs.
-Goes beyond stack detection — extracts specific version strings from
+Goes beyond stack detection  extracts specific version strings from
 headers, JS bundles, error messages, cookies, and source maps.
 """
 
@@ -252,3 +252,4 @@ class DeepFingerprinter:
             return parts1 < parts2
         except (ValueError, AttributeError):
             return False
+
