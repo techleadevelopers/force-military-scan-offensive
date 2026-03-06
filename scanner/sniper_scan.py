@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import httpx
 import json
 import re
@@ -75,8 +75,8 @@ WAF_SIGNATURES = {
 }
 
 SECURITY_HEADERS = {
-    "strict-transport-security": "HSTS missing — SSL stripping possible",
-    "content-security-policy": "CSP missing — XSS attacks have higher impact",
+    "strict-transport-security": "HSTS missing â€” SSL stripping possible",
+    "content-security-policy": "CSP missing â€” XSS attacks have higher impact",
     "x-frame-options": "Clickjacking protection missing",
     "x-content-type-options": "MIME-sniffing protection missing",
     "referrer-policy": "Referrer policy missing",
@@ -441,7 +441,7 @@ class SniperScanner:
 
         for vuln in result["vulnerabilities"]:
             findings.append({
-                "title": f"{vuln['software'].upper()} {vuln['version']} — {vuln['cve']}",
+                "title": f"{vuln['software'].upper()} {vuln['version']} â€” {vuln['cve']}",
                 "description": vuln["description"],
                 "severity": "critical",
                 "category": "known_vulnerability",
@@ -507,7 +507,7 @@ class SniperScanner:
     async def run(self, urls: List[str], min_score: int = 0):
         emit("phase_update", {"phase": "surface", "status": "running"})
         emit("log_stream", {
-            "message": f"SNIPER SCAN initialized — {len(urls)} target(s) loaded",
+            "message": f"SNIPER SCAN initialized â€” {len(urls)} target(s) loaded",
             "level": "info",
             "phase": "surface",
         })
@@ -543,7 +543,7 @@ class SniperScanner:
 
                     level = "error" if result["score"] >= 70 else "warn" if result["score"] >= 40 else "info"
                     emit("log_stream", {
-                        "message": f"[SCORE:{result['score']:3d}] {result['url']} — WAF: {','.join(result['waf'])} | Platforms: {','.join(result['platforms'][:3]) or '-'} | Server: {result['software'].get('server', '?')[:30]}",
+                        "message": f"[SCORE:{result['score']:3d}] {result['url']} â€” WAF: {','.join(result['waf'])} | Platforms: {','.join(result['platforms'][:3]) or '-'} | Server: {result['software'].get('server', '?')[:30]}",
                         "level": level,
                         "phase": "exposure",
                     })
@@ -601,7 +601,7 @@ class SniperScanner:
 
                 elif result.get("error"):
                     emit("log_stream", {
-                        "message": f"[SKIP] {result['url']} — {result.get('error', 'unreachable')}",
+                        "message": f"[SKIP] {result['url']} â€” {result.get('error', 'unreachable')}",
                         "level": "debug",
                         "phase": "surface",
                     })
@@ -660,7 +660,7 @@ class SniperScanner:
         emit("report_generated", report)
 
         emit("log_stream", {
-            "message": f"SCAN COMPLETE — {self.total_scanned} scanned | {self.total_alive} alive | {len(self.results)} targets found | {len(self.all_findings)} findings (C:{severity_counts['critical']} H:{severity_counts['high']} M:{severity_counts['medium']} L:{severity_counts['low']})",
+            "message": f"SCAN COMPLETE â€” {self.total_scanned} scanned | {self.total_alive} alive | {len(self.results)} targets found | {len(self.all_findings)} findings (C:{severity_counts['critical']} H:{severity_counts['high']} M:{severity_counts['medium']} L:{severity_counts['low']})",
             "level": "success",
             "phase": "report",
         })
@@ -697,3 +697,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
