@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json
 import sys
 import time
@@ -198,7 +198,7 @@ async def run_assessment(target: str):
     job.add_audit("assessment_started", f"Target: {target}, Matched rule: {validation.get('matched_rule', 'N/A')}")
 
     emit("log_stream", {
-        "message": f"Assessment authorized — Target: {job.hostname} (rule: {validation.get('matched_rule', 'N/A')})",
+        "message": f"Assessment authorized  Target: {job.hostname} (rule: {validation.get('matched_rule', 'N/A')})",
         "level": "success",
         "phase": "",
     })
@@ -331,7 +331,7 @@ async def run_assessment(target: str):
                     emit("stack_hypothesis", hypothesis)
                 else:
                     emit("log_stream", {
-                        "message": "[HYPOTHESIS] No specific stack fingerprint — running full generic scan",
+                        "message": "[HYPOTHESIS] No specific stack fingerprint  running full generic scan",
                         "level": "info",
                         "phase": "surface",
                     })
@@ -362,3 +362,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
