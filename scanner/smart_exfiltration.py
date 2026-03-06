@@ -1,4 +1,4 @@
-"""
+﻿"""
 MSE Smart Exfiltration Engine
 ================================
 Selective, value-based data exfiltration. Prioritizes high-value
@@ -254,3 +254,4 @@ class SmartExfiltrator:
             ],
             "regulatory_exposure": self._aggregate_regulatory(self.classified_data),
         }
+
