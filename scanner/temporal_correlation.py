@@ -1,4 +1,4 @@
-"""
+﻿"""
 MSE Temporal Correlation Engine
 =================================
 Correlates events across TIME, not just within a single scan.
@@ -64,7 +64,7 @@ class TemporalCorrelationEngine:
                         "pattern": "waf_adapting",
                         "decision": "SWITCH_MUTATION_STRATEGY",
                         "confidence": 0.80,
-                        "evidence": f"WAF block rate increased {trend:.0%} — defenses adapting",
+                        "evidence": f"WAF block rate increased {trend:.0%}  defenses adapting",
                         "trend": trend,
                     })
 
@@ -114,14 +114,14 @@ class TemporalCorrelationEngine:
                 "pattern": "accelerating_discovery",
                 "decision": "INCREASE_DEPTH",
                 "confidence": 0.80,
-                "evidence": f"Finding rate accelerating: {first_findings} → {second_findings}",
+                "evidence": f"Finding rate accelerating: {first_findings} â†’ {second_findings}",
             })
         elif first_findings > 0 and second_findings < first_findings * 0.3:
             patterns.append({
                 "pattern": "diminishing_returns",
                 "decision": "PIVOT_ATTACK_VECTOR",
                 "confidence": 0.75,
-                "evidence": f"Finding rate declining: {first_findings} → {second_findings}",
+                "evidence": f"Finding rate declining: {first_findings} â†’ {second_findings}",
             })
 
         return patterns
@@ -146,14 +146,14 @@ class TemporalCorrelationEngine:
                 "pattern": "response_time_inflation",
                 "decision": "THROTTLE_OR_PIVOT",
                 "confidence": 0.85,
-                "evidence": f"Response time inflated {early_avg:.0f}ms → {late_avg:.0f}ms — possible rate limiting or WAF throttle",
+                "evidence": f"Response time inflated {early_avg:.0f}ms â†’ {late_avg:.0f}ms  possible rate limiting or WAF throttle",
             })
         elif late_avg < early_avg * 0.5 and early_avg > 100:
             patterns.append({
                 "pattern": "response_time_deflation",
                 "decision": "INCREASE_PROBE_RATE",
                 "confidence": 0.70,
-                "evidence": f"Response time decreased {early_avg:.0f}ms → {late_avg:.0f}ms — defenses may have backed off",
+                "evidence": f"Response time decreased {early_avg:.0f}ms â†’ {late_avg:.0f}ms  defenses may have backed off",
             })
 
         return patterns
@@ -183,7 +183,7 @@ class TemporalCorrelationEngine:
                     "pattern": "finding_cascade",
                     "decision": "MAINTAIN_CURRENT_VECTOR",
                     "confidence": 0.90,
-                    "evidence": f"Findings cascading every {avg_gap:.1f}s — rich attack surface",
+                    "evidence": f"Findings cascading every {avg_gap:.1f}s  rich attack surface",
                 })
 
         return patterns
@@ -206,3 +206,4 @@ class TemporalCorrelationEngine:
             "decision_summary": decisions,
             "dominant_decision": max(decisions, key=decisions.get) if decisions else "NONE",
         }
+
