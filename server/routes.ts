@@ -17,7 +17,7 @@ import { loadAllowlistStrict, writeAllowlistStrict } from "./allowlist";
 import { guardPlan, consumeScan, normalizePlan } from "./plan/limits";
 import { PagBankService } from "./payments/pagbank-service";
 import { hasPaidAccess } from "./payments/access";
-import { storage } from "./storage";
+
 
 const BACKEND_ROOT = path.join(process.cwd(), "backend");
 const PYTHON_BIN = process.env.PYTHON_BIN || process.env.PYTHON || "python";
@@ -28,6 +28,70 @@ function safeParseJson(body: any) {
   if (!str) return null;
   try { return JSON.parse(str); } catch { return null; }
 }
+
+function ensureString(value: any): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(",");
+  return String(value);
+}
+
+async function autoDiscoverParams(target: string): Promise<string[]> {
+  try {
+    const res = await fetch(target, { redirect: "follow" });
+    const html = await res.text();
+
+    const found = new Set<string>();
+
+    // nomes já na query da URL
+    try {
+      const u = new URL(target);
+      u.searchParams.forEach((_, key) => key && found.add(key));
+    } catch {
+      /* ignore */
+    }
+
+    // names de inputs/forms
+    const nameRegex = /name\\s*=\\s*["']([^"'>\\s]+)["']/gi;
+    let m: RegExpExecArray | null;
+    while ((m = nameRegex.exec(html)) && found.size < 8) {
+      const n = (m[1] || "").trim();
+      if (n) found.add(n);
+    }
+
+    return Array.from(found).slice(0, 6);
+  } catch {
+    return [];
+  }
+}
+
+async function runWafProbe(target: string): Promise<any | null> {
+  return await new Promise((resolve) => {
+    try {
+      const probe = spawn(
+        PYTHON_BIN,
+        ["-m", "backend.scanner.sniper", target, "q", "xss"],
+        { cwd: process.cwd() }
+      );
+      let out = "";
+      let err = "";
+      probe.stdout.on("data", (d) => (out += d.toString()));
+      probe.stderr.on("data", (d) => (err += d.toString()));
+      probe.on("close", () => {
+        try {
+          const parsed = JSON.parse(out.trim() || "{}");
+          resolve({ ...parsed, _source: "auto_probe" });
+        } catch {
+          resolve(null);
+        }
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+const PYTHON_VENV = process.env.PYTHON_VENV || "C:\\Users\\Paulo\\Desktop\\military-scan-offensive\\backend\\.venv\\Scripts\\python.exe";
 
 const pagBankService = new PagBankService(
   process.env.PAGSEGURO_API_TOKEN || "",
@@ -166,6 +230,61 @@ export async function registerRoutes(
       return res.json({ apiKey: user?.apiKey || null });
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch API key" });
+    }
+  });
+
+  // Sniper WAF bypass (Python helper)
+  app.post("/api/sniper/waf", async (req: Request, res: Response) => {
+    const { target, attackType } = req.body || {};
+    const rawParams = req.body?.params;
+    if (!target) {
+      return res.status(400).json({ error: "target is required" });
+    }
+
+    const parsedParams: string[] = Array.isArray(rawParams)
+      ? rawParams.map((p: any) => ensureString(p)).filter(Boolean)
+      : (ensureString(rawParams) || "")
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
+
+    const paramsArg = parsedParams.length === 0 ? "auto" : parsedParams.join(",");
+    const attackArg = typeof attackType === "string" ? attackType : "xss";
+    const sourceLabel = parsedParams.length === 0 ? "auto_probe" : "manual";
+
+    try {
+      const proc = spawn(
+        PYTHON_VENV,
+        ["-m", "backend.scanner.sniper", target, paramsArg, attackArg],
+        { cwd: process.cwd() }
+      );
+
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout.on("data", (d) => (stdout += d.toString()));
+      proc.stderr.on("data", (d) => (stderr += d.toString()));
+
+      proc.on("close", (code) => {
+        if (code !== 0) {
+          return res
+            .status(500)
+            .json({ error: "Sniper WAF scan failed", stderr, code });
+        }
+        try {
+          const payload = JSON.parse(stdout.trim() || "{}");
+          payload._source = payload._source || sourceLabel;
+          return res.json(payload);
+        } catch (err: any) {
+          return res
+            .status(500)
+            .json({ error: "Invalid Sniper WAF output", stdout, stderr });
+        }
+      });
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ error: err?.message || "Failed to start scanner" });
     }
   });
 
@@ -558,10 +677,12 @@ export async function registerRoutes(
         : (async () => {
             try {
               const scan = await storage.createScan({
-                userId: sessionUserId,
-                target,
-                status: "running",
-              });
+  userId: sessionUserId,
+  target,
+  // Sem status aqui
+});
+// Depois atualiza com o status
+await storage.updateScan(scan.id, { status: "running" });
               log(`[LIFECYCLE] Scan record created: ${scan.id} for target ${target}`, "scanner");
               return scan.id;
             } catch (dbErr: any) {
@@ -730,13 +851,13 @@ export async function registerRoutes(
 
     let activeSniperProcess: ChildProcess | null = null;
 
-    socket.on("start_sniper_scan", async (data: { targets: string }) => {
+    socket.on("start_sniper_scan", async (data: { targets: any }) => {
       if (activeSniperProcess) {
         activeSniperProcess.kill("SIGTERM");
         activeSniperProcess = null;
       }
 
-      const targets = (data.targets || "").trim();
+      const targets: string = ensureString(data.targets).trim();
       if (!targets || targets.length > 50000) {
         socket.emit("sniper_log", { message: "Invalid targets input", level: "error" });
         return;
@@ -780,11 +901,22 @@ export async function registerRoutes(
         }
       }
 
+      const primaryTarget = urlList[0];
+      const wafProbe = await runWafProbe(primaryTarget);
+      if (wafProbe?.waf_vendor) {
+        socket.emit("sniper_log", { message: `[WAF-PROBE] ${wafProbe.waf_vendor} (${wafProbe.block_mode || "n/a"})`, level: "info" });
+      }
+
       log(`[SNIPER] Starting sniper scan for ${urlList.length} target(s)`, "scanner");
 
       const proc = spawn(PYTHON_BIN, ["-m", "scanner.sniper_scan", targets], {
         cwd: BACKEND_ROOT,
-        env: { ...process.env, PYTHONUNBUFFERED: "1" },
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: "1",
+          SNIPER_WAF_VENDOR_HINT: wafProbe?.waf_vendor || process.env.SNIPER_WAF_VENDOR_HINT || "auto",
+          SNIPER_WAF_BYPASS: "true",
+        },
         stdio: ["pipe", "pipe", "pipe"],
       });
 
@@ -865,26 +997,28 @@ export async function registerRoutes(
           try {
             const sessionUserId = (socket.request as any)?.session?.userId || null;
             if (sessionUserId) {
-              const scan = await storage.createScan({
-                userId: sessionUserId,
-                target: targets.split(",")[0] || targets,
-                status: code === 0 || code === null ? "completed" : "failed",
-              });
-              await storage.updateScan(scan.id, {
-                status: code === 0 || code === null ? "completed" : "failed",
-                findingsCount: sniperFindings.length,
-                criticalCount: severityCounts.critical,
-                highCount: severityCounts.high,
-                mediumCount: severityCounts.medium,
-                lowCount: severityCounts.low,
-                infoCount: severityCounts.info,
-                findings: sniperFindings.slice(-500),
-                exposedAssets: sniperAssets.slice(-200),
-                telemetry: { report: sniperReport },
-                completedAt: new Date(),
-              });
-              log(`[SNIPER] Scan persisted: ${scan.id}`, "scanner");
-            }
+  // Primeiro cria o scan SEM o status
+  const scan = await storage.createScan({
+    userId: sessionUserId,
+    target: targets.split(",")[0] || targets,
+  });
+  
+  // Depois atualiza com o status
+  await storage.updateScan(scan.id, {
+    status: code === 0 || code === null ? "completed" : "failed",
+    findingsCount: sniperFindings.length,
+    criticalCount: severityCounts.critical,
+    highCount: severityCounts.high,
+    mediumCount: severityCounts.medium,
+    lowCount: severityCounts.low,
+    infoCount: severityCounts.info,
+    findings: sniperFindings.slice(-500),
+    exposedAssets: sniperAssets.slice(-200),
+    telemetry: { report: sniperReport },
+    completedAt: new Date(),
+  });
+  log(`[SNIPER] Scan persisted: ${scan.id}`, "scanner");
+}
           } catch (dbErr: any) {
             log(`[SNIPER] Persist error: ${dbErr?.message}`, "scanner");
           }
@@ -913,15 +1047,16 @@ export async function registerRoutes(
 
     let activeCollectorProcess: ReturnType<typeof spawn> | null = null;
 
-    socket.on("start_auto_collect", async (data: { config: string }) => {
+    socket.on("start_auto_collect", async (data: { config: any }) => {
       if (activeCollectorProcess) {
         activeCollectorProcess.kill("SIGTERM");
         activeCollectorProcess = null;
       }
 
+      const configStr: string = ensureString(data.config);
       let config: any;
       try {
-        config = JSON.parse(data.config || "{}");
+        config = JSON.parse(configStr || "{}");
       } catch {
         socket.emit("collector_log", { message: "Invalid collector config JSON", level: "error" });
         return;
@@ -948,8 +1083,9 @@ export async function registerRoutes(
 
       log(`[AUTO-COLLECTOR] Starting target collection`, "scanner");
 
-      const configStr = JSON.stringify(config);
-      const proc = spawn(PYTHON_BIN, ["-m", "scanner.auto_collector", configStr], {
+      const configObj = typeof config === "string" ? JSON.parse(config) : config;
+      const configStrSerialized = JSON.stringify(configObj);
+      const proc = spawn(PYTHON_BIN, ["-m", "scanner.auto_collector", configStrSerialized], {
         cwd: BACKEND_ROOT,
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
         stdio: ["pipe", "pipe", "pipe"],
@@ -1064,3 +1200,4 @@ export async function registerRoutes(
 
   return httpServer;
 }
+
