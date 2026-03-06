@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import httpx
 import json
 import re
@@ -163,7 +163,7 @@ class PlatformSniper:
         self.findings_count = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
 
     async def run(self):
-        emit_log(f"Platform Sniper initialized — Target: {self.target}")
+        emit_log(f"Platform Sniper initialized  Target: {self.target}")
         emit("PLATFORM_SNIPER_START", {"target": self.target})
 
         async with httpx.AsyncClient(
@@ -228,7 +228,7 @@ class PlatformSniper:
                 self.tech_stack["headers"][header_name] = val
                 self._add_vuln(
                     "Header Information Disclosure",
-                    f"{header_name}: {val} — {warning}",
+                    f"{header_name}: {val}  {warning}",
                     "low",
                     evidence=f"{header_name}: {val}",
                 )
@@ -256,7 +256,7 @@ class PlatformSniper:
         if not csp:
             self._add_vuln(
                 "Missing Content-Security-Policy",
-                "No CSP header detected — XSS attacks have higher impact",
+                "No CSP header detected  XSS attacks have higher impact",
                 "medium",
             )
 
@@ -264,7 +264,7 @@ class PlatformSniper:
         if not hsts:
             self._add_vuln(
                 "Missing HSTS Header",
-                "Strict-Transport-Security not set — SSL stripping possible",
+                "Strict-Transport-Security not set  SSL stripping possible",
                 "low",
             )
 
@@ -291,7 +291,7 @@ class PlatformSniper:
                     "Insecure Cookie Configuration",
                     f"Cookie '{name}': {', '.join(issues)}",
                     "medium" if "HttpOnly" in str(issues) else "low",
-                    evidence=f"Cookie: {name} — {', '.join(issues)}",
+                    evidence=f"Cookie: {name}  {', '.join(issues)}",
                 )
 
     async def _fingerprint_platform(self, html: str):
@@ -312,7 +312,7 @@ class PlatformSniper:
                     await self._probe_platform_vuln(platform_name, vuln_type)
 
         if not self.tech_stack["platforms"]:
-            emit_log("No known platform signature detected — generic scan mode")
+            emit_log("No known platform signature detected  generic scan mode")
 
     async def _probe_platform_vuln(self, platform: str, vuln_type: str):
         sig = PLATFORM_SIGNATURES.get(platform, {})
@@ -328,9 +328,9 @@ class PlatformSniper:
                 if resp.status_code == 200 and "methodResponse" in resp.text:
                     self._add_vuln(
                         "WordPress XML-RPC Enabled",
-                        f"XML-RPC at {url} accepts method calls — bruteforce/DDoS amplification possible",
+                        f"XML-RPC at {url} accepts method calls  bruteforce/DDoS amplification possible",
                         "high",
-                        evidence=f"HTTP {resp.status_code} — system.listMethods returned valid response",
+                        evidence=f"HTTP {resp.status_code}  system.listMethods returned valid response",
                     )
             except Exception:
                 pass
@@ -348,7 +348,7 @@ class PlatformSniper:
                                 "WordPress User Enumeration",
                                 f"WP REST API exposes user list: {', '.join(names)}",
                                 "medium",
-                                evidence=f"GET {url} → {len(users)} users found",
+                                evidence=f"GET {url} â†’ {len(users)} users found",
                             )
                     except Exception:
                         pass
@@ -363,9 +363,9 @@ class PlatformSniper:
                     if resp.status_code == 200 and ("DB_NAME" in resp.text or "DB_PASSWORD" in resp.text):
                         self._add_vuln(
                             "WordPress Config Backup Exposed",
-                            f"Config backup at {path} — database credentials exposed",
+                            f"Config backup at {path}  database credentials exposed",
                             "critical",
-                            evidence=f"GET {url} → contains DB_NAME/DB_PASSWORD",
+                            evidence=f"GET {url} â†’ contains DB_NAME/DB_PASSWORD",
                         )
                         break
                 except Exception:
@@ -380,7 +380,7 @@ class PlatformSniper:
                         "WordPress Debug Log Exposed",
                         f"Debug log accessible at /wp-content/debug.log ({len(resp.text)} bytes)",
                         "high",
-                        evidence=f"GET {url} → {resp.status_code}",
+                        evidence=f"GET {url} â†’ {resp.status_code}",
                     )
             except Exception:
                 pass
@@ -392,9 +392,9 @@ class PlatformSniper:
                 if resp.status_code == 200 and ("=" in resp.text) and ("APP_" in resp.text or "DB_" in resp.text or "SECRET" in resp.text.upper()):
                     self._add_vuln(
                         "Environment File Exposed (.env)",
-                        f".env file accessible — contains application secrets",
+                        f".env file accessible  contains application secrets",
                         "critical",
-                        evidence=f"GET {url} → {resp.status_code} ({len(resp.text)} bytes)",
+                        evidence=f"GET {url} â†’ {resp.status_code} ({len(resp.text)} bytes)",
                     )
             except Exception:
                 pass
@@ -421,7 +421,7 @@ class PlatformSniper:
                         "Laravel Telescope Exposed",
                         "Telescope debug panel accessible without authentication",
                         "critical",
-                        evidence=f"GET {url} → {resp.status_code}",
+                        evidence=f"GET {url} â†’ {resp.status_code}",
                     )
             except Exception:
                 pass
@@ -433,9 +433,9 @@ class PlatformSniper:
                 if resp.status_code == 200 and ("stack trace" in resp.text.lower() or "Exception" in resp.text):
                     self._add_vuln(
                         "Laravel Log File Exposed",
-                        f"Application log accessible — {len(resp.text)} bytes of debug data",
+                        f"Application log accessible  {len(resp.text)} bytes of debug data",
                         "high",
-                        evidence=f"GET {url} → {resp.status_code}",
+                        evidence=f"GET {url} â†’ {resp.status_code}",
                     )
             except Exception:
                 pass
@@ -450,7 +450,7 @@ class PlatformSniper:
                             "API Documentation Exposed",
                             f"Swagger/OpenAPI docs accessible at {path}",
                             "medium",
-                            evidence=f"GET {url} → {resp.status_code}",
+                            evidence=f"GET {url} â†’ {resp.status_code}",
                         )
                         break
                 except Exception:
@@ -469,7 +469,7 @@ class PlatformSniper:
                                     "Cart API Exposed",
                                     f"Cart data accessible without authentication at {path}",
                                     "medium",
-                                    evidence=f"GET {url} → JSON response ({len(resp.text)} bytes)",
+                                    evidence=f"GET {url} â†’ JSON response ({len(resp.text)} bytes)",
                                 )
                         except Exception:
                             pass
@@ -486,7 +486,7 @@ class PlatformSniper:
                             "WooCommerce REST API Exposed",
                             f"WooCommerce API endpoint accessible: {path}",
                             "high",
-                            evidence=f"GET {url} → {resp.status_code}",
+                            evidence=f"GET {url} â†’ {resp.status_code}",
                         )
                 except Exception:
                     pass
@@ -499,9 +499,9 @@ class PlatformSniper:
                     if resp.status_code == 200:
                         self._add_vuln(
                             f"Source Map Exposed ({platform})",
-                            f"Source map accessible: {js_file}.map — full source code readable",
+                            f"Source map accessible: {js_file}.map  full source code readable",
                             "high",
-                            evidence=f"HEAD {map_url} → {resp.status_code}",
+                            evidence=f"HEAD {map_url} â†’ {resp.status_code}",
                         )
                         emit_log(f"SOURCE MAP: {js_file}.map accessible on {platform}", "error")
                         break
@@ -537,7 +537,7 @@ class PlatformSniper:
                             "API Endpoint Exposed",
                             f"Accessible API endpoint: {path} ({len(resp.text)} bytes)",
                             "medium",
-                            evidence=f"GET {url} → {resp.status_code}",
+                            evidence=f"GET {url} â†’ {resp.status_code}",
                         )
                 except Exception:
                     pass
@@ -549,9 +549,9 @@ class PlatformSniper:
                 if resp.status_code == 200 and ("login" in resp.text.lower() or "password" in resp.text.lower()):
                     self._add_vuln(
                         "Admin Panel Accessible",
-                        f"Admin login page at /admin — brute-force target",
+                        f"Admin login page at /admin  brute-force target",
                         "medium",
-                        evidence=f"GET {url} → {resp.status_code}",
+                        evidence=f"GET {url} â†’ {resp.status_code}",
                     )
             except Exception:
                 pass
@@ -595,7 +595,7 @@ class PlatformSniper:
             except Exception:
                 pass
 
-        emit_log(f"Scanned {scanned} JS files — {len(self.api_keys_found)} secrets found")
+        emit_log(f"Scanned {scanned} JS files  {len(self.api_keys_found)} secrets found")
 
     async def _scan_inline_secrets(self, html: str):
         emit_log("Scanning inline scripts and HTML for secrets...")
@@ -676,7 +676,7 @@ class PlatformSniper:
                             f"Sensitive File Exposed: {path}",
                             f"{desc} accessible at {path} ({len(resp.text)} bytes)",
                             severity,
-                            evidence=f"GET {url} → {resp.status_code}",
+                            evidence=f"GET {url} â†’ {resp.status_code}",
                         )
                         emit_log(f"SENSITIVE FILE: {path} ({len(resp.text)} bytes)", "error" if severity in ("critical", "high") else "warn")
             except Exception:
@@ -703,9 +703,9 @@ class PlatformSniper:
                     severity = "high" if acac.lower() == "true" else "medium"
                     self._add_vuln(
                         "CORS Misconfiguration",
-                        f"Server reflects arbitrary origin: {origin} → ACAO: {acao}, credentials: {acac}",
+                        f"Server reflects arbitrary origin: {origin} â†’ ACAO: {acao}, credentials: {acac}",
                         severity,
-                        evidence=f"Origin: {origin} → Access-Control-Allow-Origin: {acao}",
+                        evidence=f"Origin: {origin} â†’ Access-Control-Allow-Origin: {acao}",
                     )
                     emit_log(f"CORS BYPASS: Origin {origin} reflected with credentials={acac}", "error")
                     break
@@ -723,9 +723,9 @@ class PlatformSniper:
                 if resp.status_code == 200:
                     self._add_vuln(
                         "Source Map Exposed",
-                        f"Source map accessible: {js_path}.map — full source code readable",
+                        f"Source map accessible: {js_path}.map  full source code readable",
                         "high",
-                        evidence=f"HEAD {map_url} → {resp.status_code}",
+                        evidence=f"HEAD {map_url} â†’ {resp.status_code}",
                     )
                     emit_log(f"SOURCE MAP: {js_path}.map accessible", "error")
                     break
@@ -746,9 +746,9 @@ class PlatformSniper:
                         "Open Redirect",
                         f"Parameter '{param}' redirects to attacker-controlled URL",
                         "medium",
-                        evidence=f"GET {test_url} → Location: {location}",
+                        evidence=f"GET {test_url} â†’ Location: {location}",
                     )
-                    emit_log(f"OPEN REDIRECT: ?{param}= → {location}", "error")
+                    emit_log(f"OPEN REDIRECT: ?{param}= â†’ {location}", "error")
                     break
             except Exception:
                 pass
@@ -784,7 +784,7 @@ class PlatformSniper:
 
         emit("PLATFORM_SNIPER_REPORT", report)
         emit_log(
-            f"Scan complete — {len(self.vulnerabilities)} vulnerabilities found | "
+            f"Scan complete  {len(self.vulnerabilities)} vulnerabilities found | "
             f"Critical: {self.findings_count['critical']} | High: {self.findings_count['high']} | "
             f"Medium: {self.findings_count['medium']} | Low: {self.findings_count['low']} | "
             f"Platforms: {', '.join(self.tech_stack['platforms']) or 'none'} | "
@@ -812,3 +812,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
