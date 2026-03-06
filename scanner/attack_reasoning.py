@@ -1,19 +1,19 @@
-"""
+﻿"""
 MSE Dynamic Attack Reasoning Engine
 ====================================
 Zero-Knowledge Decision Tree that builds attack strategies from scan findings.
-No hardcoded vectors — the tree is constructed dynamically based on:
+No hardcoded vectors â€” the tree is constructed dynamically based on:
   1. Infrastructure fingerprint (AWS/Azure/GCP/On-prem)
   2. Vulnerability classes discovered during reconnaissance
   3. Real-time response drift monitoring with WAF bypass recalibration
   4. Deep exploit validation (proof-of-value for each confirmed finding)
 
 Architecture:
-  InfraFingerprint  → Detects cloud/on-prem environment from findings
-  BaselineMonitor   → Tracks response baselines, detects defense drift
-  WAFBypassEngine   → Obfuscation layer when defenses block payloads
-  AttackNode        → Base class for decision tree nodes
-  DecisionTree      → Orchestrator that builds & traverses the tree
+  InfraFingerprint  â†’ Detects cloud/on-prem environment from findings
+  BaselineMonitor   â†’ Tracks response baselines, detects defense drift
+  WAFBypassEngine   â†’ Obfuscation layer when defenses block payloads
+  AttackNode        â†’ Base class for decision tree nodes
+  DecisionTree      â†’ Orchestrator that builds & traverses the tree
 """
 
 import asyncio
@@ -199,8 +199,8 @@ class StealthThrottle:
             self._last_level_change = time.time()
             new = self.current_level
             self.log(
-                f"[STEALTH] ▲ ESCALATED: {self.LEVELS[old_level]['name']} → {new['name']} — "
-                f"{reason} | delay={new['delay']}s±{new['jitter']}s ({new['desc']})",
+                f"[STEALTH] â–² ESCALATED: {self.LEVELS[old_level]['name']} â†’ {new['name']} â€” "
+                f"{reason} | delay={new['delay']}sÂ±{new['jitter']}s ({new['desc']})",
                 "warn", "stealth"
             )
             self.emit("stealth_escalation", {
@@ -220,8 +220,8 @@ class StealthThrottle:
             self._last_level_change = time.time()
             new = self.current_level
             self.log(
-                f"[STEALTH] ▼ DE-ESCALATED: {self.LEVELS[old_level]['name']} → {new['name']} — "
-                f"{reason} | delay={new['delay']}s±{new['jitter']}s",
+                f"[STEALTH] â–¼ DE-ESCALATED: {self.LEVELS[old_level]['name']} â†’ {new['name']} â€” "
+                f"{reason} | delay={new['delay']}sÂ±{new['jitter']}s",
                 "info", "stealth"
             )
             self.emit("stealth_deescalation", {
@@ -656,7 +656,7 @@ class WAFBypassEngine:
                     self.successful_bypasses[endpoint] = technique["name"]
                     self.log(
                         f"[BYPASS] WAF bypassed on {endpoint} using '{technique['name']}' "
-                        f"({original_status} → {resp.status_code})",
+                        f"({original_status} â†’ {resp.status_code})",
                         "error", "decision_intel"
                     )
                     return resp, technique["name"], elapsed
@@ -784,7 +784,7 @@ class SSRFAttackNode(AttackNode):
 
         targets = self.infra.get_ssrf_targets()
         self.log(
-            f"[TREE:{self.node_id}] SSRF node activated — {len(ssrf_endpoints)} endpoints, "
+            f"[TREE:{self.node_id}] SSRF node activated â€” {len(ssrf_endpoints)} endpoints, "
             f"{len(ssrf_params)} params, {len(targets)} targets ({self.infra.detected.value})",
             "warn", "decision_intel"
         )
@@ -842,7 +842,7 @@ class SSRFAttackNode(AttackNode):
                             "error", "decision_intel"
                         )
                         self.add_finding({
-                            "title": f"SSRF → {target['name']} [{self.infra.detected.value.upper()}]",
+                            "title": f"SSRF â†’ {target['name']} [{self.infra.detected.value.upper()}]",
                             "description": (
                                 f"Dynamic reasoning confirmed SSRF access to '{target['name']}' via {endpoint}?{param}=. "
                                 f"Infrastructure: {self.infra.detected.value}. "
@@ -863,7 +863,7 @@ class SSRFAttackNode(AttackNode):
                             "status_code": resp.status_code,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"VULNERABLE — {target['name']} [{self.infra.detected.value.upper()}]",
+                            "verdict": f"VULNERABLE â€” {target['name']} [{self.infra.detected.value.upper()}]",
                             "severity": "CRITICAL",
                             "description": f"SSRF: {target['name']}",
                             "payload": target["url"],
@@ -939,7 +939,7 @@ class SQLiAttackNode(AttackNode):
         params = ctx["params"][:5] or ["q", "id", "search", "query", "name"]
 
         self.log(
-            f"[TREE:{self.node_id}] SQLi node — {len(endpoints)} endpoints, {len(params)} params",
+            f"[TREE:{self.node_id}] SQLi node â€” {len(endpoints)} endpoints, {len(params)} params",
             "warn", "decision_intel"
         )
 
@@ -1021,7 +1021,7 @@ class SQLiAttackNode(AttackNode):
                             "status_code": resp.status_code,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"VULNERABLE — {p_def['name']}",
+                            "verdict": f"VULNERABLE â€” {p_def['name']}",
                             "severity": "CRITICAL",
                             "description": p_def["name"],
                             "payload": p_def["payload"],
@@ -1058,7 +1058,7 @@ class EcommerceAttackNode(AttackNode):
             ecom_endpoints = ["/cart/update", "/api/checkout", "/api/cart"]
 
         self.log(
-            f"[TREE:{self.node_id}] E-commerce node — {len(ecom_endpoints)} endpoints",
+            f"[TREE:{self.node_id}] E-commerce node â€” {len(ecom_endpoints)} endpoints",
             "warn", "decision_intel"
         )
 
@@ -1104,7 +1104,7 @@ class EcommerceAttackNode(AttackNode):
                         parts.append("stack trace leaked")
 
                     self.log(
-                        f"[THREAT] E-commerce integrity failed: {endpoint} — {tc['desc']} ({', '.join(parts)})",
+                        f"[THREAT] E-commerce integrity failed: {endpoint} â€” {tc['desc']} ({', '.join(parts)})",
                         "error", "decision_intel"
                     )
                     self.add_finding({
@@ -1124,7 +1124,7 @@ class EcommerceAttackNode(AttackNode):
                         "status_code": resp.status_code,
                         "response_time_ms": elapsed,
                         "vulnerable": True,
-                        "verdict": f"VULNERABLE — {', '.join(parts)}",
+                        "verdict": f"VULNERABLE â€” {', '.join(parts)}",
                         "severity": "CRITICAL",
                         "description": tc["desc"],
                         "payload": json.dumps(tc["body"]),
@@ -1144,7 +1144,7 @@ class VerbTamperingNode(AttackNode):
         probe_paths = list(set(ctx["endpoints"][:6])) or ["/", "/api/data", "/uploads", "/files"]
 
         self.log(
-            f"[TREE:{self.node_id}] Verb tampering node — {len(methods_found)} methods, {len(probe_paths)} paths",
+            f"[TREE:{self.node_id}] Verb tampering node â€” {len(methods_found)} methods, {len(probe_paths)} paths",
             "warn", "decision_intel"
         )
 
@@ -1191,7 +1191,7 @@ class VerbTamperingNode(AttackNode):
                     status_code=resp.status_code,
                     response_time_ms=elapsed,
                     vulnerable=accepted,
-                    evidence=f"HTTP {resp.status_code} — method accepted" if accepted else "",
+                    evidence=f"HTTP {resp.status_code} â€” method accepted" if accepted else "",
                     severity="CRITICAL" if (accepted and write_confirmed) else "HIGH" if accepted else "INFO",
                     drift_detected=len(drift) > 0,
                     deep_validation=deep_val,
@@ -1201,14 +1201,14 @@ class VerbTamperingNode(AttackNode):
                     sev = "critical" if write_confirmed else "high"
                     self.log(
                         f"[THREAT] {method} accepted at {path} (HTTP {resp.status_code})"
-                        f"{' — WRITE CONFIRMED' if write_confirmed else ''}",
+                        f"{' â€” WRITE CONFIRMED' if write_confirmed else ''}",
                         "error", "decision_intel"
                     )
                     self.add_finding({
                         "title": f"Verb Tampering: {method} accepted at {path}",
                         "description": (
                             f"Dynamic reasoning confirmed {method} is accepted at {path} without access control. "
-                            f"{'Write operation verified — file creation confirmed. ' if write_confirmed else ''}"
+                            f"{'Write operation verified â€” file creation confirmed. ' if write_confirmed else ''}"
                             f"HTTP {resp.status_code}."
                         ),
                         "severity": sev,
@@ -1224,7 +1224,7 @@ class VerbTamperingNode(AttackNode):
                         "status_code": resp.status_code,
                         "response_time_ms": elapsed,
                         "vulnerable": True,
-                        "verdict": f"VULNERABLE — {method} accepted" + (" + write confirmed" if write_confirmed else ""),
+                        "verdict": f"VULNERABLE â€” {method} accepted" + (" + write confirmed" if write_confirmed else ""),
                         "severity": sev.upper(),
                         "description": f"{method} verb probe",
                         "timestamp": _ts(),
@@ -1253,7 +1253,7 @@ class APIExposureNode(AttackNode):
     async def execute(self) -> List[ExploitResult]:
         ctx = self._extract_context()
         self.log(
-            f"[TREE:{self.node_id}] API exposure node — probing {len(self.SENSITIVE_PROBES)} sensitive paths",
+            f"[TREE:{self.node_id}] API exposure node â€” probing {len(self.SENSITIVE_PROBES)} sensitive paths",
             "warn", "decision_intel"
         )
 
@@ -1306,7 +1306,7 @@ class APIExposureNode(AttackNode):
                     "status_code": resp.status_code,
                     "response_time_ms": elapsed,
                     "vulnerable": True,
-                    "verdict": f"ACCESSIBLE — sensitive data detected",
+                    "verdict": f"ACCESSIBLE â€” sensitive data detected",
                     "severity": "HIGH",
                     "description": f"Sensitive path: {probe['path']}",
                     "timestamp": _ts(),
@@ -1331,7 +1331,7 @@ class SSTIAttackNode(AttackNode):
         params = ctx["params"][:4] or ["template", "content", "message", "name", "q"]
 
         self.log(
-            f"[TREE:{self.node_id}] SSTI node — {len(endpoints)} endpoints, {len(params)} params",
+            f"[TREE:{self.node_id}] SSTI node â€” {len(endpoints)} endpoints, {len(params)} params",
             "warn", "decision_intel"
         )
 
@@ -1376,7 +1376,7 @@ class SSTIAttackNode(AttackNode):
                             "status_code": resp.status_code,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"VULNERABLE — {p_def['name']}",
+                            "verdict": f"VULNERABLE â€” {p_def['name']}",
                             "severity": "CRITICAL",
                             "payload": p_def["payload"],
                             "timestamp": _ts(),
@@ -1400,7 +1400,7 @@ class PathTraversalNode(AttackNode):
         params = ctx["params"][:4] or ["file", "path", "name", "document"]
 
         self.log(
-            f"[TREE:{self.node_id}] Path traversal node — {len(endpoints)} endpoints",
+            f"[TREE:{self.node_id}] Path traversal node â€” {len(endpoints)} endpoints",
             "warn", "decision_intel"
         )
 
@@ -1445,7 +1445,7 @@ class PathTraversalNode(AttackNode):
                             "status_code": resp.status_code,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"VULNERABLE — {p_def['name']}",
+                            "verdict": f"VULNERABLE â€” {p_def['name']}",
                             "severity": "CRITICAL",
                             "payload": p_def["payload"],
                             "timestamp": _ts(),
@@ -1549,7 +1549,7 @@ class DecisionTree:
     async def traverse(self) -> List[ExploitResult]:
         for node in self.nodes:
             self.log(
-                f"[TREE] Executing node {node.node_id} ({node.vuln_class.value}) — "
+                f"[TREE] Executing node {node.node_id} ({node.vuln_class.value}) â€” "
                 f"{len(node.source_findings)} source findings",
                 "warn", "decision_intel"
             )
@@ -1565,7 +1565,7 @@ class DecisionTree:
 
                 confirmed = sum(1 for r in results if r.vulnerable)
                 self.log(
-                    f"[TREE] Node {node.node_id} complete — {confirmed}/{len(results)} confirmed",
+                    f"[TREE] Node {node.node_id} complete â€” {confirmed}/{len(results)} confirmed",
                     "error" if confirmed > 0 else "success", "decision_intel"
                 )
                 self.emit("tree_node_complete", {
@@ -1631,3 +1631,4 @@ class DecisionTree:
             "verb_probes_vulnerable": per_class.get("verb_tampering", {}).get("confirmed", 0),
             "dynamic_params": sum(len(f_list) for f_list in self.vuln_classes_detected.values()),
         }
+
