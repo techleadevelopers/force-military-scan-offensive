@@ -3641,6 +3641,49 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
     }
 
     phase8_pre.operationalScore = (phase8_pre.totalConfirmed / phase8_pre.vectorsAttempted) * 10;
+    // --- ABUSE MATRIX WITH CONFIRMATION (Phase 8) ---------------------------
+    const ABUSE_VECTORS = [
+      { id: "TOKEN_REPLAY", weight: 0.95, requires: "tokens" },
+      { id: "CREDENTIAL_CHAIN", weight: 0.9, requires: "credentials" },
+      { id: "SSRF_PIVOT", weight: 0.88, requires: "ssrf_tunnels" },
+      { id: "ADMIN_TAKEOVER", weight: 0.92, requires: "admin_entry" },
+    ];
+
+    const abuseTelemetry = {
+      tokenEscalationRate: phase7?.tokenEscalationRate || 0.0,
+      ssrfTunnelsOpen: phase4?.tunnelsOpen || 0,
+      credentialsFound: exfilCreds.length,
+      adminEntries: (phase1?.endpoints || []).filter((e: any) => e.hasLoginForm || e.redirectsToLogin).length,
+      tokensCaptured: relaySnapshot.sessionTokens.length + (phase7?.capturedToken ? 1 : 0),
+    };
+
+    const abuseDecisions: any[] = [];
+    for (const vec of ABUSE_VECTORS_MATRIX) {
+      let requirementMet = false;
+      if (vec.requires === "tokens") requirementMet = abuseTelemetry.tokensCaptured > 0;
+      if (vec.requires === "credentials") requirementMet = abuseTelemetry.credentialsFound > 0;
+      if (vec.requires === "ssrf_tunnels") requirementMet = abuseTelemetry.ssrfTunnelsOpen > 0;
+      if (vec.requires === "admin_entry") requirementMet = abuseTelemetry.adminEntries > 0;
+
+      const confidence = abuseTelemetry.tokenEscalationRate * vec.weight;
+      if (requirementMet && confidence > 0.7) {
+        abuseDecisions.push({
+          vector: vec.id,
+          confidence: Number(confidence.toFixed(2)),
+          requires: vec.requires,
+          triggered: true,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        abuseDecisions.push({
+          vector: vec.id,
+          confidence: Number(confidence.toFixed(2)),
+          requires: vec.requires,
+          triggered: false,
+        });
+      }
+    }
+    phase8_pre.abuseMatrix = abuseDecisions;
 
     const exfilCreds: { key: string; value: string; type: string }[] = [];
     for (const ext of phase6.extractions) {
@@ -3948,7 +3991,7 @@ adminRouter.post("/api/admin/combinator/smart-auth", async (req: Request, res: R
       return { confidence: conf, formula, boosts };
     };
 
-    const ABUSE_VECTORS = [
+    const ABUSE_VECTORS_MATRIX = [
       { id: "TOKEN_REPLAY", label: "Session Token Replay", weight: 0.95, requires: "tokens", category: "session_hijack" },
       { id: "CREDENTIAL_CHAIN", label: "Credential Chain Escalation", weight: 0.90, requires: "credentials", category: "privilege_escalation" },
       { id: "SSRF_PIVOT", label: "SSRF Tunnel Pivot Abuse", weight: 0.88, requires: "ssrf_tunnels", category: "lateral_movement" },
