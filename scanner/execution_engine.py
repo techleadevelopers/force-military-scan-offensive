@@ -1,12 +1,12 @@
-import uuid
+﻿import uuid
 from datetime import datetime
 from typing import Dict, Any, List
 
 
 class ExecutionEngine:
     """
-    Executor mínimo para ações marcadas como safe_auto. As ações perigosas
-    retornam estado 'pending' para aprovação humana na UI/admin.
+    Executor mÃ­nimo para aÃ§Ãµes marcadas como safe_auto. As aÃ§Ãµes perigosas
+    retornam estado 'pending' para aprovaÃ§Ã£o humana na UI/admin.
     """
 
     def __init__(self):
@@ -18,7 +18,7 @@ class ExecutionEngine:
         if not action.get("safe_auto", False):
             return {
                 "status": "pending",
-                "message": "Ação requer aprovação manual",
+                "message": "AÃ§Ã£o requer aprovaÃ§Ã£o manual",
                 "action": action,
             }
 
@@ -31,7 +31,7 @@ class ExecutionEngine:
             elif action["name"] == "ssrf_redis":
                 result = self._exploit_ssrf_redis(target, action.get("payloads", {}))
             else:
-                result = {"status": "unsupported", "message": "Ação não implementada"}
+                result = {"status": "unsupported", "message": "AÃ§Ã£o nÃ£o implementada"}
 
             self._finish_job(job, "completed", result)
         except Exception as exc:  # pragma: no cover - defensive
@@ -61,7 +61,7 @@ class ExecutionEngine:
 
     # --- Action implementations (minimal PoC-safe) ---------------------
     def _bruteforce_virtual_host(self, target: str, wordlist: List[str]) -> Dict[str, Any]:
-        # Placeholder: integrar com existing probes (gobuster/ffuf) quando disponível.
+        # Placeholder: integrar com existing probes (gobuster/ffuf) quando disponÃ­vel.
         hosts_tested = [{"hostname": f"{w}.{target}", "status": "queued"} for w in wordlist[:20]]
         return {"status": "queued", "found_hosts": [], "tested": hosts_tested}
 
@@ -72,3 +72,4 @@ class ExecutionEngine:
     def _exploit_ssrf_redis(self, target: str, payloads: Dict[str, str]) -> Dict[str, Any]:
         used = {k: v for k, v in (payloads or {}).items()}
         return {"status": "queued", "target": target, "payloads": list(used.keys())}
+
