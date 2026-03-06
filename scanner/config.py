@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 import re
 from typing import List
@@ -69,3 +69,4 @@ def validate_target(target: str) -> dict:
         }
     except Exception as e:
         return {"valid": False, "reason": f"Invalid target format: {str(e)}"}
+
