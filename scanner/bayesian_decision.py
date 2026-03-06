@@ -1,4 +1,4 @@
-"""
+﻿"""
 MSE Bayesian Decision Engine
 ===============================
 Uses Bayesian inference for attack decisions instead of fixed thresholds.
@@ -190,3 +190,4 @@ class BayesianDecisionEngine:
                 "skip": [d["vector"] for d in skip_decisions],
             },
         }
+
