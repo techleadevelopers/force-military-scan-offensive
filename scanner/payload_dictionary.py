@@ -1,9 +1,9 @@
-"""
-MSE Payload Dictionary — Brutal Offensive Dictionary
+﻿"""
+MSE Payload Dictionary â€” Brutal Offensive Dictionary
 ========================================================
-150+ payloads organizados por vetor, contexto tecnológico, nível de
-furtividade e probabilidade de bypass WAF. Não substitui nenhum engine
-existente — alimenta o Motor 11 (AutonomousConsolidator) com seleção
+150+ payloads organizados por vetor, contexto tecnolÃ³gico, nÃ­vel de
+furtividade e probabilidade de bypass WAF. NÃ£o substitui nenhum engine
+existente â€” alimenta o Motor 11 (AutonomousConsolidator) com seleÃ§Ã£o
 inteligente baseada em contexto real coletado pelos motores 1-10.
 """
 
@@ -544,3 +544,4 @@ class PayloadDictionary:
             "top_successful": top_success[:10],
             "execution_history_count": len(self.execution_history),
         }
+
