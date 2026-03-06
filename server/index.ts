@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 
 declare module "http" {
   interface IncomingMessage {
-    rawBody: unknown;
+    rawBody: Buffer;
   }
 }
 
@@ -123,6 +123,36 @@ app.use(
     },
   })
 );
+
+// Dev helper: auto-create and auto-login admin when AUTO_ADMIN=1
+if (process.env.AUTO_ADMIN === "1") {
+  app.use(async (req, _res, next) => {
+    try {
+      const { storage } = await import("./storage");
+      const email = "admin@mse.dev";
+      let user = await storage.getUserByEmail(email);
+      if (!user) {
+        user = await storage.createUser({
+          email,
+          password: "$2b$12$CkIei0bgS3t6EAp0nahuQOshOjVPrzap8ffKCuCOmQenqUMcKT1f6", // bcrypt for "admin123!"
+          firstName: "Admin",
+          taxId: "",
+          birthDate: "",
+          role: "admin",
+          plan: "pro",
+        } as any);
+      } else if (user.role !== "admin") {
+        await storage.updateUser(user.id, { role: "admin", plan: "pro" });
+      }
+      if (!(req.session as any).userId) {
+        (req.session as any).userId = user.id;
+      }
+    } catch (err) {
+      console.error("[AUTO_ADMIN] failed:", err);
+    }
+    next();
+  });
+}
 
 app.use("/api/auth", authRouter);
 app.use(adminRouter);
