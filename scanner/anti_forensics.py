@@ -1,8 +1,8 @@
-"""
+﻿"""
 MSE Anti-Forensics Assessment Engine
 =======================================
 Assesses target's forensic capabilities and evaluates stealth
-posture. This is an ASSESSMENT module — it analyzes what traces
+posture. This is an ASSESSMENT module â€” it analyzes what traces
 the scanner would leave and recommends stealth adjustments.
 Does NOT perform destructive anti-forensic actions.
 """
@@ -199,3 +199,4 @@ class AntiForensicsAssessor:
             "active_techniques": self.active_techniques,
             "assessment": self.assessment_results,
         }
+
