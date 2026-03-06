@@ -1,18 +1,18 @@
-"""
+﻿"""
 MSE Exploitation Chain Intelligence Engine v1.0
 =================================================
 Red Team chain-of-exploitation layer that unifies:
-  1. WAF Probability Reasoning — de-prioritize blocked vectors, boost obfuscated
-  2. SSRF→Credential→DB Pivot — SSRF confirmation feeds credential dump which
+  1. WAF Probability Reasoning  de-prioritize blocked vectors, boost obfuscated
+  2. SSRFâ†’Credentialâ†’DB Pivot  SSRF confirmation feeds credential dump which
      feeds direct DB access simulation
-  3. E-commerce Integrity Validation — /cart/update $0.01 with DB reflection check
-  4. Data Drift Monitoring — real-time defense change detection + recalibration
-  5. Military Telemetry — structured [BLOCK]/[ALERT]/[THREAT] terminal output
+  3. E-commerce Integrity Validation  /cart/update $0.01 with DB reflection check
+  4. Data Drift Monitoring  real-time defense change detection + recalibration
+  5. Military Telemetry  structured [BLOCK]/[ALERT]/[THREAT] terminal output
 
 168 integrity probes across:
-  - 10 credential targets × 3 SSRF endpoints × 2 params = 60 SSRF→cred probes
-  - 7 e-commerce routes × 5 price payloads = 35 price integrity probes
-  - 8 injection payloads × 7 paths × 3 params = 168 DB validation probes
+  - 10 credential targets Ã— 3 SSRF endpoints Ã— 2 params = 60 SSRFâ†’cred probes
+  - 7 e-commerce routes Ã— 5 price payloads = 35 price integrity probes
+  - 8 injection payloads Ã— 7 paths Ã— 3 params = 168 DB validation probes
   - Unified via chain links that feed each other
 """
 
@@ -145,20 +145,20 @@ class WAFProbabilityReasoner:
 
             if block_rate >= 0.85:
                 priority_score = 0.1
-                strategy = "SUPPRESS — switch to polymorphic/obfuscated vectors"
+                strategy = "SUPPRESS  switch to polymorphic/obfuscated vectors"
             elif block_rate >= 0.5:
                 priority_score = 0.4
-                strategy = "REDUCE — use encoding bypass (base64, hex entity, unicode)"
+                strategy = "REDUCE  use encoding bypass (base64, hex entity, unicode)"
             elif stats["confirmed"] > 0:
                 priority_score = 1.0
-                strategy = "MAXIMIZE — confirmed vulnerable, full exploitation"
+                strategy = "MAXIMIZE  confirmed vulnerable, full exploitation"
             else:
                 priority_score = 0.7
-                strategy = "STANDARD — probe with standard payloads"
+                strategy = "STANDARD  probe with standard payloads"
 
             if vc in ("ssrf", VulnClass.SSRF.value) and stats["confirmed"] > 0:
                 priority_score = min(priority_score + 0.3, 1.0)
-                strategy += " + PIVOT (SSRF→Credential→DB chain)"
+                strategy += " + PIVOT (SSRFâ†’Credentialâ†’DB chain)"
 
             entry = WAFPriorityEntry(
                 vuln_class=vc,
@@ -172,7 +172,7 @@ class WAFProbabilityReasoner:
 
             self.log(
                 f"[WAF-PROB] {vc.upper()}: block_rate={block_rate:.0%}, "
-                f"confirmed={stats['confirmed']}, priority={priority_score:.1f} — {strategy}",
+                f"confirmed={stats['confirmed']}, priority={priority_score:.1f}  {strategy}",
                 "error" if block_rate >= 0.85 else ("warn" if block_rate >= 0.5 else "info"),
                 "chain_intel"
             )
@@ -258,12 +258,12 @@ class ExploitationChainIntelligence:
 
     async def execute(self) -> Dict:
         self.log(
-            "━━━ EXPLOITATION CHAIN INTELLIGENCE ENGINE v1.0 ━━━",
+            "â”â”â” EXPLOITATION CHAIN INTELLIGENCE ENGINE v1.0 â”â”â”",
             "error", "chain_intel"
         )
         self.log(
             "[CHAIN] Initializing unified attack chain: "
-            "SSRF→Credential→DB | E-commerce→Integrity | Drift→Recalibrate",
+            "SSRFâ†’Credentialâ†’DB | E-commerceâ†’Integrity | Driftâ†’Recalibrate",
             "warn", "chain_intel"
         )
         self.emit("chain_intel_start", {"findings_count": len(self.findings)})
@@ -282,7 +282,7 @@ class ExploitationChainIntelligence:
 
     async def _phase_waf_analysis(self):
         self.log(
-            "[CHAIN §1] WAF PROBABILITY ANALYSIS — Computing attack vector priorities...",
+            "[CHAIN Â§1] WAF PROBABILITY ANALYSIS  Computing attack vector priorities...",
             "warn", "chain_intel"
         )
         priorities = self.waf_reasoner.analyze()
@@ -293,14 +293,14 @@ class ExploitationChainIntelligence:
         if suppressed:
             self.log(
                 f"[WAF-PROB] SUPPRESSED vectors ({len(suppressed)}): "
-                f"{', '.join(p.vuln_class.upper() for p in suppressed)} — "
-                f"WAF blocking ≥85%, switching to obfuscated/bypass",
+                f"{', '.join(p.vuln_class.upper() for p in suppressed)}  "
+                f"WAF blocking â‰¥85%, switching to obfuscated/bypass",
                 "error", "chain_intel"
             )
         if maximized:
             self.log(
                 f"[WAF-PROB] MAXIMIZE vectors ({len(maximized)}): "
-                f"{', '.join(p.vuln_class.upper() for p in maximized)} — "
+                f"{', '.join(p.vuln_class.upper() for p in maximized)}  "
                 f"confirmed vulnerable, full exploitation authorized",
                 "error", "chain_intel"
             )
@@ -329,7 +329,7 @@ class ExploitationChainIntelligence:
 
     async def _phase_ssrf_credential_chain(self):
         self.log(
-            "[CHAIN §2] SSRF→CREDENTIAL DUMP — Pivoting confirmed SSRF to extract private keys...",
+            "[CHAIN Â§2] SSRFâ†’CREDENTIAL DUMP  Pivoting confirmed SSRF to extract private keys...",
             "error", "chain_intel"
         )
 
@@ -366,7 +366,7 @@ class ExploitationChainIntelligence:
 
         if confirmed_ssrf_from_tree:
             self.log(
-                f"[CHAIN] {len(confirmed_ssrf_from_tree)} SSRF vectors confirmed by DecisionTree — "
+                f"[CHAIN] {len(confirmed_ssrf_from_tree)} SSRF vectors confirmed by DecisionTree  "
                 f"using as primary channels for credential extraction",
                 "error", "chain_intel"
             )
@@ -381,7 +381,7 @@ class ExploitationChainIntelligence:
                             ssrf_params.insert(0, param_m.group(1))
 
         self.log(
-            f"[CHAIN] SSRF channels: {len(ssrf_endpoints)} endpoints × {len(ssrf_params)} params × "
+            f"[CHAIN] SSRF channels: {len(ssrf_endpoints)} endpoints Ã— {len(ssrf_params)} params Ã— "
             f"{len(CREDENTIAL_TARGETS)} credential targets = "
             f"{len(ssrf_endpoints) * len(ssrf_params) * len(CREDENTIAL_TARGETS)} probes",
             "warn", "chain_intel"
@@ -418,8 +418,8 @@ class ExploitationChainIntelligence:
                             }
 
                             self.log(
-                                f"[THREAT] ★ CREDENTIAL CAPTURED: {cred_target['name']} "
-                                f"via {endpoint}?{param}= (HTTP {resp.status_code}) — "
+                                f"[THREAT] â˜… CREDENTIAL CAPTURED: {cred_target['name']} "
+                                f"via {endpoint}?{param}= (HTTP {resp.status_code})  "
                                 f"Initiating DB pivot chain...",
                                 "error", "chain_intel"
                             )
@@ -457,9 +457,9 @@ class ExploitationChainIntelligence:
                                 "status_code": resp.status_code,
                                 "response_time_ms": elapsed,
                                 "vulnerable": True,
-                                "verdict": f"CREDENTIAL CAPTURED — {cred_target['name']}",
+                                "verdict": f"CREDENTIAL CAPTURED  {cred_target['name']}",
                                 "severity": "CRITICAL",
-                                "description": f"Chain: SSRF→{cred_target['pivot_type']}",
+                                "description": f"Chain: SSRFâ†’{cred_target['pivot_type']}",
                                 "payload": cred_target["url"][:100],
                                 "evidence": body[:200],
                                 "response_snippet": body[:300],
@@ -487,7 +487,7 @@ class ExploitationChainIntelligence:
 
         captured_count = len(self.captured_credentials)
         self.log(
-            f"[CHAIN] SSRF credential phase complete — {captured_count}/{len(CREDENTIAL_TARGETS)} "
+            f"[CHAIN] SSRF credential phase complete  {captured_count}/{len(CREDENTIAL_TARGETS)} "
             f"services yielded credentials",
             "error" if captured_count > 0 else "success",
             "chain_intel"
@@ -496,13 +496,13 @@ class ExploitationChainIntelligence:
     async def _phase_credential_to_db_pivot(self):
         if not self.captured_credentials:
             self.log(
-                "[CHAIN §3] DB PIVOT SKIPPED — No credentials captured from SSRF phase",
+                "[CHAIN Â§3] DB PIVOT SKIPPED  No credentials captured from SSRF phase",
                 "info", "chain_intel"
             )
             return
 
         self.log(
-            f"[CHAIN §3] CREDENTIAL→DB PIVOT — Using {len(self.captured_credentials)} captured credentials "
+            f"[CHAIN Â§3] CREDENTIALâ†’DB PIVOT  Using {len(self.captured_credentials)} captured credentials "
             f"to bypass backend sanitization and access database directly...",
             "error", "chain_intel"
         )
@@ -510,7 +510,7 @@ class ExploitationChainIntelligence:
         should_probe, strategy = self.waf_reasoner.should_probe("sqli")
         if not should_probe:
             self.log(
-                f"[WAF-PROB] SQLi vectors SUPPRESSED by WAF — using credential-based bypass instead: {strategy}",
+                f"[WAF-PROB] SQLi vectors SUPPRESSED by WAF  using credential-based bypass instead: {strategy}",
                 "warn", "chain_intel"
             )
 
@@ -523,17 +523,17 @@ class ExploitationChainIntelligence:
 
         if has_postgres:
             self.log(
-                "[CHAIN] PostgreSQL connection detected via SSRF — targeting pg-specific injection vectors",
+                "[CHAIN] PostgreSQL connection detected via SSRF  targeting pg-specific injection vectors",
                 "error", "chain_intel"
             )
         if has_redis:
             self.log(
-                "[CHAIN] Redis access confirmed — session/cache manipulation possible",
+                "[CHAIN] Redis access confirmed  session/cache manipulation possible",
                 "error", "chain_intel"
             )
         if has_aws:
             self.log(
-                "[CHAIN] AWS credentials captured — attempting IAM→RDS credential chain for full DB access",
+                "[CHAIN] AWS credentials captured  attempting IAMâ†’RDS credential chain for full DB access",
                 "error", "chain_intel"
             )
 
@@ -606,8 +606,8 @@ class ExploitationChainIntelligence:
                         })
 
                         self.log(
-                            f"[THREAT] ★ DB ACCESS CONFIRMED: {payload_def['name']} "
-                            f"at {endpoint}?{param}= (HTTP {resp.status_code}, {elapsed}ms) — "
+                            f"[THREAT] â˜… DB ACCESS CONFIRMED: {payload_def['name']} "
+                            f"at {endpoint}?{param}= (HTTP {resp.status_code}, {elapsed}ms)  "
                             f"{'Time-based blind confirmed' if time_based else 'Data returned in response'}",
                             "error", "chain_intel"
                         )
@@ -627,7 +627,7 @@ class ExploitationChainIntelligence:
                         self.add_finding({
                             "title": f"DB Access via Credential Pivot: {payload_def['name']}",
                             "description": (
-                                f"Chain exploitation confirmed: SSRF→Credential ({pivot_source})→DB. "
+                                f"Chain exploitation confirmed: SSRFâ†’Credential ({pivot_source})â†’DB. "
                                 f"{payload_def['name']} succeeded at {endpoint}?{param}=. "
                                 f"{'Blind SQLi confirmed via time delay.' if time_based else 'Database structure visible in response.'}"
                             ),
@@ -646,9 +646,9 @@ class ExploitationChainIntelligence:
                             "status_code": resp.status_code,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"DB ACCESS — {payload_def['name']} via credential pivot",
+                            "verdict": f"DB ACCESS  {payload_def['name']} via credential pivot",
                             "severity": "CRITICAL",
-                            "description": f"Chain: Credential→{payload_def['name']}",
+                            "description": f"Chain: Credentialâ†’{payload_def['name']}",
                             "payload": payload_def["payload"][:100],
                             "evidence": evidence_type,
                             "response_snippet": body[:300],
@@ -657,14 +657,14 @@ class ExploitationChainIntelligence:
 
         db_confirmed = len(self.db_access_results)
         self.log(
-            f"[CHAIN] DB pivot phase complete — {db_confirmed} database access vectors confirmed",
+            f"[CHAIN] DB pivot phase complete  {db_confirmed} database access vectors confirmed",
             "error" if db_confirmed > 0 else "success",
             "chain_intel"
         )
 
     async def _phase_ecommerce_integrity(self):
         self.log(
-            "[CHAIN §4] E-COMMERCE INTEGRITY — Testing price manipulation with DB reflection check...",
+            "[CHAIN Â§4] E-COMMERCE INTEGRITY  Testing price manipulation with DB reflection check...",
             "warn", "chain_intel"
         )
 
@@ -720,7 +720,7 @@ class ExploitationChainIntelligence:
                             if field_val is not None:
                                 db_reflected = True
                                 self.log(
-                                    f"[ALERT] DB REFLECTION CONFIRMED: {route} — "
+                                    f"[ALERT] DB REFLECTION CONFIRMED: {route}  "
                                     f"{payload['check_field']}={field_val} (manipulated value persisted)",
                                     "error", "chain_intel"
                                 )
@@ -746,7 +746,7 @@ class ExploitationChainIntelligence:
                         reflection_note = " DB REFLECTED THE CHANGE." if db_reflected else ""
 
                         self.log(
-                            f"[THREAT] ★ PRICE INTEGRITY FAILED: {route} — "
+                            f"[THREAT] â˜… PRICE INTEGRITY FAILED: {route}  "
                             f"{payload['desc']} (HTTP {resp.status_code}).{reflection_note}",
                             "error", "chain_intel"
                         )
@@ -766,7 +766,7 @@ class ExploitationChainIntelligence:
                             "description": (
                                 f"Chain Intelligence confirmed price manipulation at {route}. "
                                 f"{payload['desc']}. HTTP {resp.status_code}. "
-                                f"{'Database reflected the manipulated value — real financial impact confirmed.' if db_reflected else 'Backend accepted the payload.'}"
+                                f"{'Database reflected the manipulated value  real financial impact confirmed.' if db_reflected else 'Backend accepted the payload.'}"
                             ),
                             "severity": "critical",
                             "category": "ecommerce_integrity",
@@ -783,7 +783,7 @@ class ExploitationChainIntelligence:
                             "status_code": resp.status_code,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"PRICE INTEGRITY FAILED{' — DB REFLECTED' if db_reflected else ''}",
+                            "verdict": f"PRICE INTEGRITY FAILED{'  DB REFLECTED' if db_reflected else ''}",
                             "severity": "CRITICAL",
                             "description": payload["desc"],
                             "payload": json.dumps(payload["body"]),
@@ -793,7 +793,7 @@ class ExploitationChainIntelligence:
                         })
                     else:
                         self.log(
-                            f"[BLOCK] Price integrity held: {route} — {payload['desc']} (HTTP {resp.status_code})",
+                            f"[BLOCK] Price integrity held: {route}  {payload['desc']} (HTTP {resp.status_code})",
                             "success", "chain_intel"
                         )
 
@@ -803,7 +803,7 @@ class ExploitationChainIntelligence:
         ecom_vulns = sum(1 for r in self.ecommerce_results if r["vulnerable"])
         ecom_reflected = sum(1 for r in self.ecommerce_results if r.get("db_reflected"))
         self.log(
-            f"[CHAIN] E-commerce integrity phase complete — {ecom_vulns} failures, "
+            f"[CHAIN] E-commerce integrity phase complete  {ecom_vulns} failures, "
             f"{ecom_reflected} with DB reflection confirmed",
             "error" if ecom_vulns > 0 else "success",
             "chain_intel"
@@ -811,7 +811,7 @@ class ExploitationChainIntelligence:
 
     async def _phase_race_condition(self):
         self.log(
-            "[CHAIN §5b] RACE CONDITION DETECTION — TOCTOU / double-spend / parallel request abuse...",
+            "[CHAIN Â§5b] RACE CONDITION DETECTION  TOCTOU / double-spend / parallel request abuse...",
             "warn", "chain_intel"
         )
 
@@ -889,7 +889,7 @@ class ExploitationChainIntelligence:
                     if vulnerable:
                         self.successful_probes += 1
                         self.log(
-                            f"[THREAT] ★ RACE CONDITION CONFIRMED: {endpoint} — "
+                            f"[THREAT] â˜… RACE CONDITION CONFIRMED: {endpoint}  "
                             f"{accepted_count}/5 parallel requests accepted ({payload['desc']})",
                             "error", "chain_intel"
                         )
@@ -926,7 +926,7 @@ class ExploitationChainIntelligence:
                             "status_code": 200,
                             "response_time_ms": elapsed,
                             "vulnerable": True,
-                            "verdict": f"RACE CONDITION — {accepted_count}/5 parallel accepted",
+                            "verdict": f"RACE CONDITION  {accepted_count}/5 parallel accepted",
                             "severity": "CRITICAL",
                             "description": payload["desc"],
                             "payload": json.dumps(payload["body"]),
@@ -935,7 +935,7 @@ class ExploitationChainIntelligence:
                         })
                     else:
                         self.log(
-                            f"[BLOCK] Race condition held: {endpoint} — "
+                            f"[BLOCK] Race condition held: {endpoint}  "
                             f"{accepted_count}/5 accepted ({payload['desc']})",
                             "success", "chain_intel"
                         )
@@ -945,7 +945,7 @@ class ExploitationChainIntelligence:
 
         race_vulns = sum(1 for r in race_results if r["vulnerable"])
         self.log(
-            f"[CHAIN] Race condition phase complete — {race_vulns} vulnerable, "
+            f"[CHAIN] Race condition phase complete  {race_vulns} vulnerable, "
             f"{len(race_results)} total tests",
             "error" if race_vulns > 0 else "success",
             "chain_intel"
@@ -953,7 +953,7 @@ class ExploitationChainIntelligence:
 
     async def _phase_drift_recalibration(self):
         self.log(
-            "[CHAIN §6] DRIFT RECALIBRATION — Checking defense changes during chain execution...",
+            "[CHAIN Â§6] DRIFT RECALIBRATION  Checking defense changes during chain execution...",
             "warn", "chain_intel"
         )
 
@@ -981,8 +981,8 @@ class ExploitationChainIntelligence:
                     direction = "HARDENED" if current_status in (403, 429, 503) else "RELAXED"
 
                     self.log(
-                        f"[ALERT] DEFENSE DRIFT: {endpoint} changed {baseline_status}→{current_status} ({direction}) — "
-                        f"{'Target is patching mid-scan!' if direction == 'HARDENED' else 'Defense weakened — new attack surface'}",
+                        f"[ALERT] DEFENSE DRIFT: {endpoint} changed {baseline_status}â†’{current_status} ({direction})  "
+                        f"{'Target is patching mid-scan!' if direction == 'HARDENED' else 'Defense weakened  new attack surface'}",
                         "error", "chain_intel"
                     )
 
@@ -1000,7 +1000,7 @@ class ExploitationChainIntelligence:
                                     snapshot.new_target = alt_host
                                     rerouted = True
                                     self.log(
-                                        f"[ALERT] REROUTED: {endpoint} → {alt_host} (HTTP {alt_resp.status_code})",
+                                        f"[ALERT] REROUTED: {endpoint} â†’ {alt_host} (HTTP {alt_resp.status_code})",
                                         "warn", "chain_intel"
                                     )
 
@@ -1018,7 +1018,7 @@ class ExploitationChainIntelligence:
 
                         if not rerouted:
                             self.log(
-                                f"[BLOCK] No alternative route found for {endpoint} — endpoint hardened",
+                                f"[BLOCK] No alternative route found for {endpoint}  endpoint hardened",
                                 "warn", "chain_intel"
                             )
 
@@ -1026,7 +1026,7 @@ class ExploitationChainIntelligence:
                         "title": f"Defense Drift Detected: {endpoint} ({direction})",
                         "description": (
                             f"Target defense changed during chain execution: {endpoint} status "
-                            f"{baseline_status}→{current_status} ({direction}). "
+                            f"{baseline_status}â†’{current_status} ({direction}). "
                             f"{'Attack tree recalculated.' if snapshot.recalibrated else 'No alternative route available.'}"
                         ),
                         "severity": "medium" if direction == "HARDENED" else "high",
@@ -1041,7 +1041,7 @@ class ExploitationChainIntelligence:
         drift_count = sum(1 for s in self.drift_snapshots if s.drift_detected)
         recalibrated = sum(1 for s in self.drift_snapshots if s.recalibrated)
         self.log(
-            f"[CHAIN] Drift analysis complete — {drift_count} endpoints changed, "
+            f"[CHAIN] Drift analysis complete  {drift_count} endpoints changed, "
             f"{recalibrated} rerouted to alternative hosts",
             "error" if drift_detected else "success",
             "chain_intel"
@@ -1056,7 +1056,7 @@ class ExploitationChainIntelligence:
         drift_reroutes = sum(1 for s in self.drift_snapshots if s.recalibrated)
 
         self.log(
-            "━━━ CHAIN INTELLIGENCE SUMMARY ━━━",
+            "â”â”â” CHAIN INTELLIGENCE SUMMARY â”â”â”",
             "error" if (ssrf_captures + db_pivots + ecom_failures) > 0 else "success",
             "chain_intel"
         )
@@ -1125,3 +1125,4 @@ class ExploitationChainIntelligence:
                 ],
             },
         }
+
