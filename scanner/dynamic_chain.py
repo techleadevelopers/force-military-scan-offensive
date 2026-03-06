@@ -1,8 +1,8 @@
-"""
+﻿"""
 MSE Dynamic Chain Builder
 ============================
 Builds exploitation chains DYNAMICALLY in real-time based on
-what it discovers. Not pre-defined chains — adaptive paths
+what it discovers. Not pre-defined chains  adaptive paths
 constructed from live intelligence.
 """
 
@@ -206,3 +206,4 @@ class DynamicChainBuilder:
             "highest_probability_step": max(self.chain, key=lambda s: s["probability"]) if self.chain else None,
             "critical_path": [s["technique"] for s in self.chain if s["probability"] > 0.7],
         }
+
