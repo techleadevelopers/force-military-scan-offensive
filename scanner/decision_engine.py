@@ -1,4 +1,4 @@
-import json
+﻿import json
 from datetime import datetime
 from typing import Dict, Any, List
 
@@ -7,7 +7,7 @@ from scanner.probability_engine import ProbabilityEngine
 
 class DecisionEngine:
     """
-    Traduz findings em TOP N ações priorizadas. Mantém histórico in-memory
+    Traduz findings em TOP N aÃ§Ãµes priorizadas. MantÃ©m histÃ³rico in-memory
     para debug/telemetria.
     """
 
@@ -45,3 +45,4 @@ class DecisionEngine:
 
         self.execution_history.append(decision)
         return decision
+
