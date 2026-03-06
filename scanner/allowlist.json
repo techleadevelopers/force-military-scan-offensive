@@ -9,6 +9,8 @@
     "www.forcescan.site",
     "*.www.forcescan.site",
     "www.sicredi.com.br",
-    "*.www.sicredi.com.br"
+    "*.www.sicredi.com.br",
+    "www.gazin.com.br",
+    "*.www.gazin.com.br"
   ]
 }
