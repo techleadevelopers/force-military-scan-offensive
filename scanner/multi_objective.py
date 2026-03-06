@@ -1,4 +1,4 @@
-"""
+﻿"""
 MSE Multi-Objective Optimizer
 ================================
 Optimizes multiple conflicting objectives simultaneously:
@@ -170,3 +170,4 @@ class MultiObjectiveOptimizer:
             "pareto_front_size": len(self._pareto_frontier(self.evaluation_history)),
             "objective_weights": {k: v["weight"] for k, v in self.objectives.items()},
         }
+
